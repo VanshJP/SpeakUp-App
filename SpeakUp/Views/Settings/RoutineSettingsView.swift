@@ -45,14 +45,11 @@ struct RoutineSettingsView: View {
 
     private var chainSection: some View {
         VStack(spacing: 10) {
-            GlassSectionHeader("In your routine", icon: TodayHomeModule.routine.icon)
+            GlassSectionHeader("In your routine")
 
-            GlassCard(padding: 4) {
-                VStack(spacing: 0) {
-                    ForEach(Array(steps.enumerated()), id: \.element) { index, step in
-                        if index > 0 { divider }
-                        chainRow(step, index: index)
-                    }
+            GlassRowGroup(dividerInset: Self.dividerInset) {
+                ForEach(Array(steps.enumerated()), id: \.element) { index, step in
+                    chainRow(step, index: index)
                 }
             }
         }
@@ -74,14 +71,15 @@ struct RoutineSettingsView: View {
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 2) {
+            HStack(spacing: 0) {
                 moveButton(step, by: -1, icon: "chevron.up", enabled: index > 0)
                 moveButton(step, by: 1, icon: "chevron.down", enabled: index < steps.count - 1)
                 removeButton(step)
             }
         }
         .frame(minHeight: AppLayout.minHitTarget)
-        .padding(.horizontal, 12)
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
         .padding(.vertical, 8)
     }
 
@@ -93,10 +91,10 @@ struct RoutineSettingsView: View {
             Image(systemName: icon)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(enabled ? .secondary : .tertiary)
-                .frame(width: 32, height: AppLayout.minHitTarget)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .disabled(!enabled)
         .accessibilityLabel(offset < 0 ? "Move \(step.title) earlier" : "Move \(step.title) later")
     }
@@ -115,10 +113,10 @@ struct RoutineSettingsView: View {
                 Image(systemName: "minus.circle.fill")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .frame(width: 32, height: AppLayout.minHitTarget)
+                    .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
             .accessibilityLabel("Remove \(step.title)")
         }
     }
@@ -127,54 +125,50 @@ struct RoutineSettingsView: View {
 
     private var addSection: some View {
         VStack(spacing: 10) {
-            GlassSectionHeader("Add a link", icon: "plus.circle")
+            GlassSectionHeader("Add a link")
 
-            GlassCard(padding: 4) {
-                VStack(spacing: 0) {
-                    ForEach(Array(available.enumerated()), id: \.element) { index, step in
-                        if index > 0 { divider }
-                        Button {
-                            Haptics.light()
-                            apply(PracticeRoutine.adding(step, to: steps))
-                        } label: {
-                            HStack(spacing: 12) {
-                                IconChip(icon: step.icon, tint: step.tint, size: 30)
+            GlassRowGroup(dividerInset: Self.dividerInset) {
+                ForEach(available, id: \.self) { step in
+                    Button {
+                        Haptics.light()
+                        apply(PracticeRoutine.adding(step, to: steps))
+                    } label: {
+                        HStack(spacing: 12) {
+                            IconChip(icon: step.icon, tint: step.tint, size: 30)
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(step.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                    Text(step.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-
-                                Spacer(minLength: 8)
-
-                                Image(systemName: "plus")
-                                    .font(.caption.weight(.bold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(step.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text(step.detail)
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            .frame(minHeight: AppLayout.minHitTarget)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .contentShape(Rectangle())
+
+                            Spacer(minLength: 8)
+
+                            Image(systemName: "plus")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(GlassPressStyle())
-                        .accessibilityElement(children: .combine)
-                        .accessibilityAddTraits(.isButton)
+                        .frame(minHeight: AppLayout.minHitTarget)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
                     }
+                    // A row lights up in place; scaling one would tear it
+                    // away from its neighbours on the plate.
+                    .buttonStyle(RowPressStyle())
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
                 }
             }
         }
     }
 
-    private var divider: some View {
-        Divider()
-            .overlay(AppColors.cardStroke)
-            .padding(.leading, 54)
-    }
+    /// Rules start under the step names: 14pt inset + 30pt chip + 12pt gap.
+    private static let dividerInset: CGFloat = 56
 
     // MARK: - Persistence
 

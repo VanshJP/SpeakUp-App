@@ -18,14 +18,9 @@ struct FillerCounterOverlay: View {
         .foregroundStyle(tint)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .stroke(count > 0 ? AppColors.warning.opacity(0.3) : .clear, lineWidth: 1)
-                }
-        }
+        // Glass lights its own edge; the warning tint rides on the glyph and
+        // the count, not on a painted rim.
+        .glassEffect(.regular, in: .capsule)
         .animation(AppMotion.settle, value: count > 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(count) filler words so far")

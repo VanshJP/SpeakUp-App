@@ -8,14 +8,18 @@ struct ScenarioReadinessSection: View {
     /// never as a competing headline number.
     let overallScore: Int?
     let analyzedSessions: Int
+    /// Starts practice in a row's scenario. The rows used to name the weak
+    /// situation and stop there; nil keeps them read-only until the root
+    /// passes a route.
+    var onPractice: ((PracticeScenario) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if analyzedSessions < 2 || cards.isEmpty {
                 quietState
             } else {
-                GlassSectionHeader("Where to improve", icon: "scope") {
-                    Text("weakest first")
+                GlassSectionHeader("Where to improve") {
+                    Text("Weakest first")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -33,19 +37,46 @@ struct ScenarioReadinessSection: View {
         }
     }
 
+    /// One plate of rows with hairlines that start where the row text does.
     private var readinessCard: some View {
-        GlassCard(padding: 6) {
-            VStack(spacing: 0) {
-                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                    if index > 0 {
-                        MetricRowDivider()
-                    }
-                    ScenarioRow(readiness: card)
+        GlassRowGroup(dividerInset: ScenarioRowLayout.textInset) {
+            ForEach(cards) { card in
+                row(for: card.scenario) {
+                    ScenarioRow(readiness: card, isActionable: onPractice != nil)
                 }
-
-                invitationRows
-                aggregateFooter
             }
+
+            ForEach(missingScenarios) { scenario in
+                row(for: scenario) {
+                    ScenarioInvitationRow(scenario: scenario, isActionable: onPractice != nil)
+                }
+            }
+
+            aggregateFooter
+        }
+    }
+
+    private var missingScenarios: [PracticeScenario] {
+        let practiced = Set(cards.map(\.scenario))
+        return PracticeScenario.allCases.filter { $0.isCore && !practiced.contains($0) }
+    }
+
+    /// A row that starts practice when the root can route it, otherwise a
+    /// row that only reads.
+    @ViewBuilder
+    private func row<RowContent: View>(for scenario: PracticeScenario, @ViewBuilder label: () -> RowContent) -> some View {
+        if let onPractice {
+            Button {
+                Haptics.light()
+                onPractice(scenario)
+            } label: {
+                label()
+                    .contentShape(.rect)
+            }
+            .buttonStyle(RowPressStyle())
+            .accessibilityHint("Starts a \(scenario.title.lowercased()) prompt")
+        } else {
+            label()
         }
     }
 
@@ -55,8 +86,6 @@ struct ScenarioReadinessSection: View {
     @ViewBuilder
     private var aggregateFooter: some View {
         if let overallScore {
-            MetricRowDivider()
-
             HStack(spacing: 6) {
                 Text("Combined readiness \(overallScore)")
                     .font(.caption2.weight(.semibold))
@@ -69,25 +98,22 @@ struct ScenarioReadinessSection: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, ScenarioRowLayout.padding)
+            .padding(.vertical, 10)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Combined readiness \(overallScore) of 100 across \(analyzedSessions) analyzed sessions.")
         }
     }
+}
 
-    @ViewBuilder
-    private var invitationRows: some View {
-        let practiced = Set(cards.map(\.scenario))
-        let missing = PracticeScenario.allCases.filter { $0.isCore && !practiced.contains($0) }
+// MARK: - Row Layout
 
-        if !missing.isEmpty {
-            ForEach(missing) { scenario in
-                MetricRowDivider()
-                ScenarioInvitationRow(scenario: scenario)
-            }
-        }
-    }
+private enum ScenarioRowLayout {
+    static let padding: CGFloat = 14
+    static let chipSize: CGFloat = 30
+    static let chipSpacing: CGFloat = 12
+    /// Where row text starts, so the group's hairlines line up with it.
+    static let textInset: CGFloat = padding + chipSize + chipSpacing
 }
 
 // MARK: - Scenario Tint
@@ -145,7 +171,7 @@ private struct MomentumGlyph: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: momentum.symbolName)
-                .font(.system(size: 8, weight: .bold))
+                .font(.caption2.weight(.bold))
             Text(momentum.label)
                 .font(.caption2.weight(.semibold))
         }
@@ -155,10 +181,21 @@ private struct MomentumGlyph: View {
     }
 }
 
+/// The trailing mark of a row that starts practice.
+private struct RowChevron: View {
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Scenario Row
 
 private struct ScenarioRow: View {
     let readiness: ScenarioReadiness
+    var isActionable = false
 
     private var tint: Color { ScenarioTint.color(for: readiness.scenario) }
 
@@ -168,48 +205,47 @@ private struct ScenarioRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: readiness.scenario.icon)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background {
-                    Circle()
-                        .fill(tint.opacity(0.13))
+        HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: ScenarioRowLayout.chipSpacing) {
+                IconChip(icon: readiness.scenario.icon, tint: tint, size: ScenarioRowLayout.chipSize)
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(readiness.scenario.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 4)
+
+                        MomentumGlyph(momentum: readiness.momentum)
+
+                        // A dash, not "N/A": the meta line already says the
+                        // bucket needs more language before it can score.
+                        Text(readiness.score.map(String.init) ?? "–")
+                            .font(.statValue)
+                            .foregroundStyle(scoreColor)
+                            .contentTransition(.numericText())
+                    }
+
+                    if let score = readiness.score {
+                        TickMeter(fraction: Double(score) / 100, color: scoreColor, tickCount: 28)
+                            .frame(height: 5)
+                    }
+
+                    Text(metaLine)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    holdingBackLine
                 }
+            }
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(readiness.scenario.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    Spacer(minLength: 4)
-
-                    MomentumGlyph(momentum: readiness.momentum)
-
-                    Text(readiness.score.map(String.init) ?? "N/A")
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(scoreColor)
-                        .contentTransition(.numericText())
-                }
-
-                if let score = readiness.score {
-                    TickMeter(fraction: Double(score) / 100, color: scoreColor, tickCount: 28)
-                        .frame(height: 5)
-                }
-
-                Text(metaLine)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                holdingBackLine
+            if isActionable {
+                RowChevron()
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
+        .padding(ScenarioRowLayout.padding)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
     }
@@ -253,19 +289,16 @@ private struct ScenarioRow: View {
 
 private struct ScenarioInvitationRow: View {
     let scenario: PracticeScenario
+    var isActionable = false
 
     private var tint: Color { ScenarioTint.color(for: scenario) }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: scenario.icon)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(tint.opacity(0.7))
-                .frame(width: 30, height: 30)
-                .background {
-                    Circle()
-                        .fill(tint.opacity(0.07))
-                }
+        HStack(spacing: ScenarioRowLayout.chipSpacing) {
+            // Dimmed, not a second recipe: an unpracticed scenario wears the
+            // same chip at lower strength.
+            IconChip(icon: scenario.icon, tint: tint, size: ScenarioRowLayout.chipSize)
+                .opacity(0.6)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(scenario.title)
@@ -283,9 +316,13 @@ private struct ScenarioInvitationRow: View {
             Text("Not yet")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+
+            if isActionable {
+                RowChevron()
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.horizontal, ScenarioRowLayout.padding)
+        .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(scenario.title): no sessions yet. \(scenario.blurb)")
     }

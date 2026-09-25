@@ -13,6 +13,10 @@ struct ScoreHeroCard: View {
     let strongestAxisID: String?
     let weakestAxisID: String?
     let onShowWeights: () -> Void
+    /// False until the personal-average snapshot lands. The "vs your
+    /// average" line stays empty until then: with no average yet it read
+    /// "Your first scored session" on every open, then flipped.
+    var baselinesLoaded: Bool = true
 
     var body: some View {
         GlassCard(padding: 16, elevated: true) {
@@ -23,7 +27,7 @@ struct ScoreHeroCard: View {
                 weakestAxisID: weakestAxisID,
                 personalAverage: personalAverage,
                 showsWeightsButton: true,
-                showsPersonalContext: true,
+                showsPersonalContext: baselinesLoaded,
                 animate: false,
                 interactive: true,
                 onShowWeights: onShowWeights
@@ -132,11 +136,14 @@ struct ScoreHeroBody: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 30, height: 30)
+                        .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
+                // Lays out at the eyebrow's height; the 44pt target overhangs.
+                .padding(.vertical, -10)
                 .accessibilityLabel("Adjust score weights")
+                .accessibilityHint("Changes apply to future takes")
             }
         }
     }

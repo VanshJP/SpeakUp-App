@@ -12,12 +12,10 @@ struct GoalProgressBadge: View {
 
     var body: some View {
         if let goal {
-            GlassCard(tint: AppColors.primary.opacity(0.08)) {
+            // Neutral plate; the goal's colour rides on its glyph and ring.
+            GlassCard {
                 HStack(spacing: 12) {
-                    Image(systemName: goal.type.iconName)
-                        .font(.title3)
-                        .foregroundStyle(AppColors.primary)
-                        .frame(width: 28)
+                    IconChip(icon: goal.type.iconName, size: 32)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(goal.title)

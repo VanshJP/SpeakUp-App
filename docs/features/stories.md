@@ -9,7 +9,7 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 | Role | Path |
 |------|------|
 | Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift`, `StoryFolderHealing.swift` (plan + `StoryFolderSeedService` apply) |
-| Views | `SpeakUp/Views/Stories/` — list, detail, editor, folder bar/sheet |
+| Views | `SpeakUp/Views/Stories/` — list (+ `StoryTagPill`, `StoryDeleteCopy`, `.storiesErrorAlert`), detail, editor, folder bar, folder/Move sheets (+ `StoryFolderChip`) |
 | Today card | `SpeakUp/Views/Today/StoryPromptCard.swift` |
 | VM | `SpeakUp/ViewModels/StoriesViewModel.swift` |
 | Tagging | `SpeakUp/Services/StoryTaggingService.swift` (LLM when available; conservative) |
@@ -50,9 +50,12 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
    so ghosts cannot flood those surfaces before heal finishes. **Deleting a display chip** removes every
    same-normalized-name `StoryFolder` (unfiles their stories) so siblings cannot resurrect the chip.
    Folder scope is a clearable filter: re-tapping the selected chip returns to All; `hasActiveFilters` /
-   Clear Filters include `folderSelection != .all`.
+   Clear Filters include `folderSelection != .all` but **not** the sort order (a sort narrows nothing).
+   A tag tapped on a story's page (`applyTagFilter`) leads the bar as a selected chip; tapping it runs
+   `clearTagFilter()` (folder and sort stay). It used to filter invisibly, with All still selected.
+   Folder deletes confirm (`StoryFolderBar.deleteMessage`) from the chip menu and the folder sheet alike.
 
-9. **Nothing touches a story after deleting it.** `StoryEditorView` drops `draftStory` (and its autosave) *before* `deleteStory`: its `onDisappear` runs `finalSave()`, which otherwise wrote the editor's fields straight back into the deleted row. `StoryDetailView` renders nothing past `storyIsGone` (`isDeleted || story.isDeleted || story.modelContext == nil`) and pops itself when the editor sheet it presented deleted the story - it used to stay open on a story that no longer existed. Same rule as `RecordingDetailView.deleteRecording`: stop reading, then delete.
+9. **Nothing touches a story after deleting it.** `StoryEditorView` sets `isFinished` and drops `draftStory` (and its autosave) *before* `deleteStory`: its `onDisappear` runs `finalSave()`, which otherwise wrote the editor's fields straight back into the deleted row. `StoryDetailView` renders nothing past `storyIsGone` (`isDeleted || story.isDeleted || story.modelContext == nil`) and pops itself when the editor sheet it presented deleted the story - it used to stay open on a story that no longer existed. Same rule as `RecordingDetailView.deleteRecording`: stop reading, then delete.
 
 10. **Remote-change refreshes are fingerprint- and visibility-gated.** `NSPersistentStoreRemoteChange` fires for this
     process's own saves too (simulator probe: every main- and background-context save posts it, CloudKit on or off), so each
@@ -67,7 +70,20 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
     preview from `StoriesViewModel.contentPreview(for:)`, memoized per (id, `updatedAt`). `StoryDetailView` decodes RTFD,
     word count and reading time once per `updatedAt` into a `@State` reference box (`StoryDisplayCache`) filled
     synchronously in body, so first paint has styled text with no placeholder flash. Linked-take summaries come from
-    `StoriesViewModel.linkedTakeSummaries(for:)` on a detached `ModelContext` (gotchas §3).
+    `StoriesViewModel.linkedTakeSummaries(for:)` on a detached `ModelContext` (gotchas §3). Rows stay lazy, so the
+    story list keeps a card per row; the page's takes are one `GlassRowGroup`.
+12. **A story take is as long as the story.** Every Library start (page CTA, list context menu) passes
+    `Story.practiceDuration`: the smallest `RecordingDuration` ≥ `estimatedDurationSeconds` × 1.15, never under a
+    minute. Never hardcode `.sixty` - a take saves and stops at its limit by default, which cut longer scripts in half.
+13. **The editor is a sheet, so it cannot start practice.** ContentView's session cover and warm-up/drill sheets
+    cannot present over it, so its menu has no Practice / Warm-Up / Drill; the story page owns them. The presenter
+    passes `onCreated`, called once when a new story survives the editor closing, and the Library pushes that story's
+    page. The editor closes with a leading `Button(role: .close)` (it autosaves: no Cancel / Save) and keeps its tool
+    rows in `.safeAreaBar(edge: .bottom)`. `finalSave()` runs once (`isFinished`), saves text typed inside the 2s
+    autosave window, and deletes only an emptied draft it created - never an existing story.
+14. **One recipe per confirmation and error.** Story deletes read `StoryDeleteCopy` (list, page, editor).
+    `.storiesErrorAlert(viewModel)` presents `StoriesViewModel.errorMessage` on the list and the page, whichever is
+    on screen - failures used to be silent.
 
 ## Cross-links
 

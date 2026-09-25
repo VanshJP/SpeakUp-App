@@ -11,6 +11,7 @@ struct PlaybackDrawerContainer: View {
     let onSeek: (Double) -> Void
 
     @Environment(AudioService.self) private var audioService
+    @Environment(\.glassAppearance) private var glassAppearance
 
     @State private var drawerState: PlaybackDrawerState = .collapsed
     @State private var dragOffset: CGFloat = 0
@@ -22,9 +23,13 @@ struct PlaybackDrawerContainer: View {
     private let rubberBandLimit: CGFloat = 56       // resistance sets in past this
     private let rubberBandFactor: CGFloat = 0.32    // smaller = stiffer past limit
 
+    /// The dark glyph on a white transport disc - the same ink `GlassButton`'s
+    /// primary style uses. Local on purpose: AppColors has no ink token yet.
+    private static let ink = Color(red: 0.07, green: 0.07, blue: 0.08)
+
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
+            VStack(spacing: 0) {
                 Button {
                     Haptics.selection()
                     withAnimation(drawerSpring) {
@@ -35,13 +40,13 @@ struct PlaybackDrawerContainer: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(drawerState == .expanded ? 0.55 : 0.35))
                         .rotationEffect(.degrees(drawerState == .expanded ? 180 : 0))
-                        .padding(.top, 3)
-                        .padding(.horizontal, 40)
+                        // A full-width 44pt grab row; the glyph was a ~26pt
+                        // target on its own.
+                        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
                 .accessibilityLabel(drawerState == .expanded ? "Collapse playback drawer" : "Expand playback drawer")
-                .accessibilityAddTraits(.isButton)
 
                 if drawerState == .expanded {
                     playbackControlSection
@@ -56,14 +61,16 @@ struct PlaybackDrawerContainer: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .background(
-                UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea(edges: .bottom)
-            )
-            .overlay(alignment: .top) {
-                UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                    .stroke(.white.opacity(0.12), lineWidth: 0.5)
+            // Liquid Glass like every other plate, run down under the home
+            // indicator. A material slab read as a flat grey band across the
+            // navy canvas, and its hairline rim doubled the edge glass lights
+            // on its own (ui-design-system rule 13).
+            .background {
+                Color.clear
+                    .glassEffect(
+                        .regular.tint(glassAppearance.glassTint),
+                        in: UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                    )
                     .ignoresSafeArea(edges: .bottom)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -180,7 +187,22 @@ struct PlaybackDrawerContainer: View {
             )
         }
         .frame(height: height)
+        // Readable and adjustable: swipe up or down to skip ten seconds.
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Playback position")
+        .accessibilityValue("\(formatTime(playbackViewModel.currentTime)) of \(formatTime(displayDuration))")
+        .accessibilityAddTraits(.updatesFrequently)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: seekBy(seconds: 10)
+            case .decrement: seekBy(seconds: -10)
+            @unknown default: break
+            }
+        }
+    }
+
+    private var displayDuration: TimeInterval {
+        playbackViewModel.playbackDuration > 0 ? playbackViewModel.playbackDuration : recording.actualDuration
     }
 
     @ViewBuilder
@@ -194,7 +216,7 @@ struct PlaybackDrawerContainer: View {
 
                 scrubber(height: 32)
 
-                Text(formatTime(playbackViewModel.playbackDuration > 0 ? playbackViewModel.playbackDuration : recording.actualDuration))
+                Text(formatTime(displayDuration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 40, alignment: .trailing)
@@ -202,40 +224,43 @@ struct PlaybackDrawerContainer: View {
 
             HStack(spacing: 22) {
                 Button {
+                    Haptics.selection()
                     seekBy(seconds: -10)
                 } label: {
                     Image(systemName: "gobackward.10")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
                 .accessibilityLabel("Skip back 10 seconds")
 
                 Button {
+                    Haptics.light()
                     onTogglePlayback()
                 } label: {
                     Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
+                        .foregroundStyle(Self.ink)
                         .frame(width: 52, height: 52)
                         .background(Circle().fill(Color.white.opacity(0.94)))
                         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
                 .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
 
                 Button {
+                    Haptics.selection()
                     seekBy(seconds: 10)
                 } label: {
                     Image(systemName: "goforward.10")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
                 .accessibilityLabel("Skip forward 10 seconds")
             }
         }
@@ -245,16 +270,19 @@ struct PlaybackDrawerContainer: View {
     private var collapsedPlaybackBar: some View {
         HStack(spacing: 12) {
             Button {
+                Haptics.light()
                 onTogglePlayback()
             } label: {
+                // 36pt disc, 44pt target.
                 Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
+                    .foregroundStyle(Self.ink)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.94)))
-                    .contentShape(Circle())
+                    .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
             .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
 
             scrubber(height: 28)

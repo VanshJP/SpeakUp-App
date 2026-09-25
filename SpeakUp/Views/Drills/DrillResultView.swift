@@ -31,7 +31,9 @@ struct DrillResultView: View {
                         font: .system(size: 44, weight: .bold, design: .rounded)
                     )
 
-                    Text(result.passed ? "Passed" : "Try again")
+                    // A verdict, not an instruction: "Try again" here sat right
+                    // above a Try again button.
+                    Text(result.passed ? "Passed" : "Not yet")
                         .eyebrowStyle(result.passed ? AppColors.success : AppColors.error)
                 }
             }
@@ -45,17 +47,11 @@ struct DrillResultView: View {
             // Drills used to forget every run the moment this screen closed,
             // so there was never anything to beat.
             if let milestone = result.milestone {
-                Label(milestone, systemImage: "arrow.up.right.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppColors.success)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AppColors.success.opacity(0.14))
-                    }
-                    .padding(.horizontal)
+                StatusPill(
+                    text: milestone,
+                    color: AppColors.success,
+                    glyph: .icon("arrow.up.right")
+                )
             }
 
             Spacer()

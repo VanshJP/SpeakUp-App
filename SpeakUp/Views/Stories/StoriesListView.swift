@@ -51,7 +51,7 @@ struct StoriesListView: View {
             if viewModel.stories.isEmpty {
                 EmptyStateCard(
                     icon: "note.text",
-                    title: "Your stories",
+                    title: "No stories yet",
                     message: "Write scripts, capture quick notes, and reflect on practice sessions. Tap + to start."
                 )
                 .padding(.top, 20)
@@ -86,17 +86,19 @@ struct StoriesListView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .alert("Delete Story?", isPresented: $showingDeleteAlert) {
+        .alert(StoryDeleteCopy.title, isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 if let story = storyToDelete {
+                    storyToDelete = nil
                     viewModel.deleteStory(story)
                     Haptics.warning()
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This story and its tags will be permanently deleted. Linked recordings will not be removed.")
+            Text(StoryDeleteCopy.message)
         }
+        .storiesErrorAlert(viewModel)
         .onAppear {
             viewModel.configure(with: modelContext)
             viewModel.surfaceAppeared()
@@ -121,14 +123,14 @@ struct StoriesListView: View {
         let unpinned = viewModel.unpinnedStories
         return LazyVStack(alignment: .leading, spacing: 8) {
             if !pinned.isEmpty {
-                GlassSectionHeader("Pinned", icon: "pin.fill")
+                GlassSectionHeader("Pinned")
                 ForEach(pinned) { story in
                     storyRow(story)
                 }
             }
 
             if !unpinned.isEmpty {
-                GlassSectionHeader(pinned.isEmpty ? "All Stories" : "Stories", icon: "note.text")
+                GlassSectionHeader(pinned.isEmpty ? "All stories" : "Stories")
                     .padding(.top, pinned.isEmpty ? 0 : 8)
                 ForEach(unpinned) { story in
                     storyRow(story)
@@ -137,6 +139,9 @@ struct StoriesListView: View {
         }
     }
 
+    /// Row actions live in the context menu. `.swipeActions` only works on
+    /// `List` rows, and these are `LazyVStack` children, so the swipe
+    /// actions that used to sit here never fired.
     private func storyRow(_ story: Story) -> some View {
         Button {
             selectedStory = story
@@ -144,37 +149,10 @@ struct StoriesListView: View {
             CompactStoryRow(story: story, preview: viewModel.contentPreview(for: story))
         }
         .buttonStyle(GlassPressStyle())
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                viewModel.toggleFavorite(story)
-                Haptics.light()
-            } label: {
-                Label(
-                    story.isFavorite ? "Unpin" : "Pin",
-                    systemImage: story.isFavorite ? "pin.slash" : "pin"
-                )
-            }
-            .tint(AppColors.warning)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                storyToDelete = story
-                showingDeleteAlert = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-
-            Button {
-                movingStory = story
-            } label: {
-                Label("Move", systemImage: "folder")
-            }
-            .tint(AppColors.primary)
-        }
         .contextMenu {
             if let onStartPractice {
                 Button {
-                    onStartPractice(story, .sixty)
+                    onStartPractice(story, story.practiceDuration)
                 } label: {
                     Label("Practice", systemImage: "mic.fill")
                 }
@@ -182,6 +160,7 @@ struct StoriesListView: View {
 
             Button {
                 viewModel.toggleFavorite(story)
+                Haptics.light()
             } label: {
                 Label(
                     story.isFavorite ? "Unpin" : "Pin",
@@ -226,19 +205,24 @@ struct StoriesListView: View {
 
     private var sortMenu: some View {
         Menu {
-            Section("Sort") {
-                ForEach(StorySortOrder.allCases) { order in
-                    Button {
-                        Haptics.light()
-                        viewModel.setSortOrder(order)
-                    } label: {
-                        HStack {
-                            Label(order.rawValue, systemImage: order.icon)
-                            if viewModel.sortOrder == order { Spacer(); Image(systemName: "checkmark") }
-                        }
-                    }
+            // A Picker, so the current order wears the system checkmark. A
+            // checkmark Image inside a menu button's label was dropped, and
+            // the current sort showed nowhere.
+            Picker(selection: Binding(
+                get: { viewModel.sortOrder },
+                set: { order in
+                    Haptics.light()
+                    viewModel.setSortOrder(order)
                 }
+            )) {
+                ForEach(StorySortOrder.allCases) { order in
+                    Label(order.rawValue, systemImage: order.icon)
+                        .tag(order)
+                }
+            } label: {
+                Text("Sort")
             }
+            .pickerStyle(.inline)
 
             if viewModel.hasActiveFilters {
                 Section {
@@ -257,6 +241,7 @@ struct StoriesListView: View {
                 .headerIconChrome()
         }
         .accessibilityLabel("Sort and filter stories")
+        .accessibilityValue("Sorted by \(viewModel.sortOrder.rawValue)")
     }
 
 }
@@ -280,6 +265,49 @@ enum FolderEditorPresentation: Identifiable {
     }
 }
 
+// MARK: - Shared Copy
+
+/// One confirmation wherever a story is deleted - the list, its page and the
+/// editor had three different messages for the same act.
+enum StoryDeleteCopy {
+    static let title = "Delete Story?"
+    static let message = "This story will be permanently deleted. Its practice recordings are kept."
+}
+
+// MARK: - Error Alert
+
+/// Shows `StoriesViewModel.errorMessage`, which no Stories view presented:
+/// failed saves, moves and deletes were silent. Only the surface on screen
+/// presents it, so the list under a pushed story page does not race the
+/// page for the same alert.
+struct StoriesErrorAlert: ViewModifier {
+    let viewModel: StoriesViewModel
+    @State private var isOnScreen = false
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { isOnScreen = true }
+            .onDisappear { isOnScreen = false }
+            .alert(
+                "Something went wrong",
+                isPresented: Binding(
+                    get: { isOnScreen && viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.errorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+    }
+}
+
+extension View {
+    func storiesErrorAlert(_ viewModel: StoriesViewModel) -> some View {
+        modifier(StoriesErrorAlert(viewModel: viewModel))
+    }
+}
+
 // MARK: - Compact Story Row
 
 private struct CompactStoryRow: View {
@@ -300,11 +328,12 @@ private struct CompactStoryRow: View {
                 HStack(spacing: 6) {
                     if story.isFavorite {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(AppColors.warning)
+                            .accessibilityLabel("Pinned")
                     }
                     Text(story.title.isEmpty ? "Untitled" : story.title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                 }
@@ -316,12 +345,13 @@ private struct CompactStoryRow: View {
                     if !preview.isEmpty {
                         Text("·")
                             .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
                         Text(preview)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
-                .font(.system(size: 13))
+                .font(.footnote)
 
                 if !tags.isEmpty {
                     tagStrip(tags)
@@ -333,6 +363,7 @@ private struct CompactStoryRow: View {
             if story.bestScore > 0 {
                 Text("\(story.bestScore)")
                     .font(.caption2.weight(.bold))
+                    .monospacedDigit()
                     .foregroundStyle(AppColors.scoreColor(for: story.bestScore))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
@@ -340,6 +371,7 @@ private struct CompactStoryRow: View {
                         Capsule()
                             .fill(AppColors.scoreColor(for: story.bestScore).opacity(0.15))
                     }
+                    .accessibilityLabel("Best score \(story.bestScore)")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -354,13 +386,14 @@ private struct CompactStoryRow: View {
             }
             if overflow > 0 {
                 Text("+\(overflow)")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background {
                         Capsule().fill(Color.white.opacity(0.08))
                     }
+                    .accessibilityLabel("\(overflow) more tags")
             }
         }
     }
@@ -371,7 +404,10 @@ private struct CompactStoryRow: View {
 struct StoryTagPill: View {
     let tag: StoryTag
     var size: TagSize = .regular
+    /// Editor: the whole pill removes the tag; its ✕ is the hint. A separate
+    /// 7pt ✕ was too small to hit and had no VoiceOver name.
     var onRemove: (() -> Void)?
+    /// Detail: filters the list by this tag.
     var onTap: (() -> Void)?
 
     enum TagSize {
@@ -379,37 +415,45 @@ struct StoryTagPill: View {
     }
 
     var body: some View {
-        let content = HStack(spacing: 4) {
+        if let onRemove {
+            Button(action: onRemove) {
+                pill(showsRemove: true)
+                    .frame(minHeight: AppLayout.minHitTarget)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(GlassPressStyle())
+            .accessibilityLabel("Remove tag \(tag.value)")
+        } else if let onTap {
+            Button(action: onTap) {
+                pill(showsRemove: false)
+                    .frame(minHeight: AppLayout.minHitTarget)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(GlassPressStyle())
+            .accessibilityHint("Shows stories with this tag")
+        } else {
+            pill(showsRemove: false)
+        }
+    }
+
+    private func pill(showsRemove: Bool) -> some View {
+        HStack(spacing: 4) {
             Image(systemName: tag.type.icon)
             Text(tag.value)
                 .lineLimit(1)
-            if let onRemove {
-                Button {
-                    onRemove()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                }
+            if showsRemove {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.5))
             }
         }
-        .font(size == .small ? .system(size: 10, weight: .medium) : .caption.weight(.medium))
+        .font(size == .small ? .caption2.weight(.medium) : .caption.weight(.medium))
         .foregroundStyle(tagColor.opacity(0.9))
         .padding(.horizontal, size == .small ? 8 : 10)
         .padding(.vertical, size == .small ? 4 : 5)
         .background {
             Capsule()
                 .fill(tagColor.opacity(0.15))
-        }
-
-        if let onTap {
-            Button {
-                onTap()
-            } label: {
-                content
-            }
-            .buttonStyle(.plain)
-        } else {
-            content
         }
     }
 

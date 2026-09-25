@@ -26,7 +26,7 @@ struct RecordingLookView: View {
                     hero
 
                     GlassButton(
-                        title: "Play Preview",
+                        title: "Play preview",
                         icon: "play.fill",
                         style: .primary,
                         size: .medium,
@@ -35,7 +35,7 @@ struct RecordingLookView: View {
                         openPreview()
                     }
                     .accessibilityHint("Plays a full-screen countdown and recording. The record button stops it.")
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, AppLayout.pageHorizontal)
 
                     group(
                         title: "Background",
@@ -68,7 +68,7 @@ struct RecordingLookView: View {
                     }
 
                     group(
-                        title: "Record Button",
+                        title: "Record button",
                         caption: "The button you press to start and stop a take.",
                         options: RecordButtonStyle.allCases,
                         selected: viewModel.recordButtonStyle,
@@ -94,7 +94,7 @@ struct RecordingLookView: View {
                     }
 
                     group(
-                        title: "Timer Direction",
+                        title: "Timer direction",
                         caption: "Whether the clock counts toward your limit or away from it.",
                         options: CountdownStyle.allCases,
                         selected: viewModel.countdownStyle,
@@ -188,7 +188,7 @@ struct RecordingLookView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .onTapGesture { openPreview() }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, AppLayout.pageHorizontal)
         .animation(AppMotion.settle, value: viewModel.recordingBackdrop)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Preview of your recording look")
@@ -216,16 +216,14 @@ struct RecordingLookView: View {
         select: @escaping (Option) -> Void,
         @ViewBuilder thumbnail: @escaping (Option) -> Thumb
     ) -> some View {
+        // Same header recipe as App Look's sections, its sibling on the hub.
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+            GlassSectionHeader(title)
 
-                Text(caption)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 76), spacing: 12)],
@@ -252,28 +250,30 @@ struct RecordingLookView: View {
                             .frame(width: 76, height: 76)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .overlay {
+                                // White selection ring, as on App Look: the
+                                // look is the colour here, not the chrome.
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                                     .strokeBorder(
-                                        isSelected ? AppColors.primary : AppColors.cardStroke,
+                                        isSelected ? Color.white.opacity(0.9) : AppColors.cardStroke,
                                         lineWidth: isSelected ? 2 : 1
                                     )
                             }
 
                             Text(option[keyPath: name])
                                 .font(.caption2.weight(isSelected ? .semibold : .regular))
-                                .foregroundStyle(isSelected ? AppColors.primary : .secondary)
+                                .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.secondary))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel(option[keyPath: name])
                     .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 }
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, AppLayout.pageHorizontal)
     }
 }

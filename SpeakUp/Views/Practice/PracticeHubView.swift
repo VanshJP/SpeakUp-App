@@ -116,9 +116,9 @@ struct PracticeHubView: View {
                     viewModel: storiesViewModel,
                     existingStory: nil,
                     initialFolderId: currentStoryFolderId,
-                    onStartPractice: onStartStoryPractice,
-                    onSendToWarmUp: onSendToWarmUp,
-                    onSendToDrill: onSendToDrill
+                    // A new story opens on its own page, where Practice,
+                    // Warm up and Drill live - the editor sheet can't start them.
+                    onCreated: { selectedStory = $0 }
                 )
             }
             .presentationDetents([.large])
@@ -173,17 +173,23 @@ struct PracticeHubView: View {
         // every other row on the page, which is not a search result.
         let matchesWordLibrary = query.count >= 2
             && "words dictionary vocabulary definitions lexicon".localizedStandardContains(query)
+        // The exercises themselves, by name - "box breathing", "impromptu",
+        // "tongue twister" used to find nothing. Same two-letter floor.
+        let visibleItems = query.count >= 2 ? PracticeToolKind.items(matching: query) : []
 
         return VStack(alignment: .leading, spacing: 20) {
             InlineSearchField(text: $toolsSearchText, prompt: "Search tools…") {
                 EmptyView()
             }
 
-            if visiblePractice.isEmpty && visibleReview.isEmpty && visibleFocuses.isEmpty && !matchesWordLibrary {
+            if visiblePractice.isEmpty && visibleItems.isEmpty && visibleReview.isEmpty
+                && visibleFocuses.isEmpty && !matchesWordLibrary {
                 EmptyStateCard(
                     icon: "magnifyingglass",
                     title: "No tools match",
-                    message: "Nothing here matches \"\(query)\". Try a different search."
+                    message: "Nothing here matches \"\(query)\". Try a different search.",
+                    buttonTitle: "Clear search",
+                    buttonAction: { toolsSearchText = "" }
                 )
             } else {
 
@@ -213,6 +219,18 @@ struct PracticeHubView: View {
                     }
                 }
 
+                if !visibleItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        GlassSectionHeader("Exercises")
+
+                        GlassRowGroup(dividerInset: PracticeLinkRowLabel.dividerInset) {
+                            ForEach(visibleItems) { item in
+                                exerciseResultRow(item)
+                            }
+                        }
+                    }
+                }
+
                 // The outcome axis, one row rather than the header, caption and
                 // eight rows it used to be. Both were doors to the same forty
                 // exercises and this was the longer one; the axis itself lives
@@ -220,13 +238,16 @@ struct PracticeHubView: View {
                 // different - a query for "fillers" should land on the outcome,
                 // not on a row that promises to have one.
                 if query.isEmpty {
-                    PracticeImproveEntryRow()
-                    WordLibraryEntryRow()
+                    // Two rows that push, so one plate - not two cards.
+                    GlassRowGroup(dividerInset: PracticeLinkRowLabel.dividerInset) {
+                        PracticeImproveEntryRow()
+                        wordsEntryRow
+                    }
                 } else if !visibleFocuses.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        GlassSectionHeader("Improve", icon: "target")
+                        GlassSectionHeader("Improve")
 
-                        VStack(spacing: 10) {
+                        GlassRowGroup(dividerInset: PracticeLinkRowLabel.dividerInset) {
                             ForEach(visibleFocuses) { focus in
                                 PracticeFocusRow(focus: focus)
                             }
@@ -235,7 +256,9 @@ struct PracticeHubView: View {
                 }
 
                 if matchesWordLibrary {
-                    WordLibraryEntryRow()
+                    GlassRowGroup {
+                        wordsEntryRow
+                    }
                 }
 
                 if !visibleReview.isEmpty {
@@ -261,12 +284,42 @@ struct PracticeHubView: View {
         }
     }
 
+    /// A search hit pushes its tool page, scrolled to the item's group.
+    private func exerciseResultRow(_ item: PracticeToolItem) -> some View {
+        NavigationLink(value: PracticeToolRoute(tool: item.tool, focus: item.focus)) {
+            PracticeLinkRowLabel(
+                icon: item.tool.icon,
+                tint: item.tool.color,
+                title: item.title,
+                meta: "\(item.tool.title) · \(item.focus.title)"
+            )
+        }
+        .buttonStyle(RowPressStyle())
+    }
+
+    /// The Words entry as a row on the entry group - a card of its own on
+    /// the group's plate would be glass on glass.
+    private var wordsEntryRow: some View {
+        let summary = "\(DefaultVocabLexicon.entries.count) words"
+        return NavigationLink(value: WordLibraryRoute()) {
+            PracticeLinkRowLabel(
+                icon: "character.book.closed.fill",
+                tint: AppColors.categorySage,
+                title: "Words",
+                subtitle: "Look up a word, keep the ones worth using",
+                meta: summary
+            )
+        }
+        .buttonStyle(RowPressStyle())
+        .accessibilityLabel("Words. Look up a word, keep the ones worth using. \(summary).")
+    }
+
     private func toolGrid<Content: View>(
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader(title, icon: title == "Review" ? "ellipsis.circle" : "wrench.and.screwdriver")
+            GlassSectionHeader(title)
 
             LazyVGrid(
                 columns: [
@@ -337,37 +390,26 @@ struct PracticeHubView: View {
                     Label("Add Multiple Prompts", systemImage: "text.badge.plus")
                 }
             } label: {
-                fabLabel
+                fabLabel("Add prompt")
             }
-            .accessibilityLabel("Add prompt")
         case .stories:
             Button {
                 Haptics.heavy()
                 showingNewStory = true
             } label: {
-                fabLabel
+                fabLabel("New story")
             }
             .buttonStyle(GlassPressStyle())
-            .accessibilityLabel("New story")
         case .tools:
             EmptyView()
         }
     }
 
-    private var fabLabel: some View {
-        Image(systemName: "plus")
-            .font(.title2.weight(.semibold))
-            .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-            .frame(width: 58, height: 58)
-            .background {
-                Circle()
-                    .fill(Color.white.opacity(0.94))
-                    .shadow(color: .black.opacity(0.35), radius: 12, y: 5)
-            }
-            .overlay {
-                Circle()
-                    .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-            }
+    /// Says what it adds: a bare "+" meant a prompt on one section and a
+    /// story on the next, and was a hand-rolled white disc beside the
+    /// primary style that owns that fill (ui-design-system rule 4).
+    private func fabLabel(_ title: String) -> some View {
+        GlassButtonLabel(title: title, icon: "plus", style: .primary)
     }
 
     // MARK: - Helpers

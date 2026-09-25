@@ -6,9 +6,11 @@ struct StoryEditorView: View {
     @Bindable var viewModel: StoriesViewModel
     var existingStory: Story?
     var initialFolderId: UUID?
-    var onStartPractice: ((Story, RecordingDuration) -> Void)?
-    var onSendToWarmUp: ((Story) -> Void)?
-    var onSendToDrill: ((Story) -> Void)?
+    /// Called once when the editor closes having created a story that
+    /// survives (not emptied). The Library pushes that story's page, where
+    /// Practice / Warm up / Drill live: this sheet cannot start them itself,
+    /// because ContentView's session cover cannot present over a sheet.
+    var onCreated: ((Story) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -40,6 +42,13 @@ struct StoryEditorView: View {
 
     @State private var draftStory: Story?
     @State private var autoSaveTask: Task<Void, Never>?
+    /// Set by the first `finalSave()` (or a delete). The close button saves
+    /// and then `onDisappear` saves again; the second pass must not create
+    /// a duplicate story or resurrect a deleted one.
+    @State private var isFinished = false
+    /// "No tags found" on the Auto-tag button for a moment after a pass
+    /// that added nothing - it used to end in silence.
+    @State private var autoTagNotice: String?
 
     @FocusState private var focusedField: Field?
     @State private var contentFocused = false
@@ -59,7 +68,7 @@ struct StoryEditorView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             AppBackground(style: .subtle)
 
             PageScrollView {
@@ -67,7 +76,7 @@ struct StoryEditorView: View {
                     titleField
                     folderChip
 
-                    if !tags.isEmpty || isExtractingTags {
+                    if !tags.isEmpty {
                         tagCloud
                     }
 
@@ -78,28 +87,33 @@ struct StoryEditorView: View {
                         tagInputRow
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 96)
+                .padding(.horizontal, AppLayout.pageHorizontal)
+                .padding(.vertical, 12)
             }
             .scrollDismissesKeyboard(.interactively)
-
-            VStack(spacing: 8) {
-                transcribingBanner
-                    .padding(.horizontal, 20)
-                bottomBar
+            // A bar, not an overlay: the page scrolls under it with the
+            // system's soft edge and knows its height. It was a material slab
+            // in a ZStack with a guessed 96pt of clearance for a ~100pt bar,
+            // so the tag field - last on the page - focused underneath it.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                VStack(spacing: 8) {
+                    transcribingBanner
+                        .padding(.horizontal, AppLayout.pageHorizontal)
+                    bottomBar
+                }
             }
         }
-        .navigationTitle("")
+        .navigationTitle(isEditing ? "Edit story" : "New story")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Delete Story?", isPresented: $showingDeleteConfirm) {
+        .alert(StoryDeleteCopy.title, isPresented: $showingDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 if let story = draftStory ?? existingStory {
-                    // Drop the draft first: dismissing runs `finalSave()` from
+                    // Finish first: dismissing runs `finalSave()` from
                     // `onDisappear`, which wrote the editor's fields back into
                     // the story it had just deleted - a write to a deleted
-                    // SwiftData object.
+                    // SwiftData object - or recreated it from the text.
+                    isFinished = true
                     autoSaveTask?.cancel()
                     draftStory = nil
                     viewModel.deleteStory(story)
@@ -108,15 +122,15 @@ struct StoryEditorView: View {
                 }
             }
         } message: {
-            Text("This story will be permanently deleted.")
+            Text(StoryDeleteCopy.message)
         }
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Done") {
+            // The editor autosaves, so closing is saving: no Cancel/Save pair.
+            ToolbarItem(placement: .topBarLeading) {
+                Button(role: .close) {
                     finalSave()
                     dismiss()
                 }
-                .fontWeight(.semibold)
             }
             ToolbarItem(placement: .principal) {
                 wordCountLabel
@@ -184,7 +198,7 @@ struct StoryEditorView: View {
 
     private var titleField: some View {
         TextField("Title", text: $title)
-            .font(.system(size: 26, weight: .bold))
+            .font(.title.weight(.bold))
             .foregroundStyle(.white)
             .focused($focusedField, equals: .title)
             .submitLabel(.next)
@@ -194,41 +208,18 @@ struct StoryEditorView: View {
     // MARK: - Folder chip
 
     private var folderChip: some View {
-        Button {
+        StoryFolderChip(folder: currentFolder) {
             if draftStory == nil && !isEditing {
                 // Ensure a draft exists so move sheet can operate
                 ensureDraftForMove()
             }
             showingMoveSheet = true
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: currentFolder?.systemImage ?? "tray.full")
-                    .font(.system(size: 11, weight: .semibold))
-                Text(currentFolder?.name ?? "All Stories")
-                    .font(.system(size: 13, weight: .semibold))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .foregroundStyle(folderColor)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background {
-                Capsule().fill(folderColor.opacity(0.15))
-            }
         }
-        .buttonStyle(.plain)
     }
 
     private var currentFolder: StoryFolder? {
         guard let id = selectedFolderId else { return nil }
         return viewModel.folders.first { $0.id == id }
-    }
-
-    private var folderColor: Color {
-        if let folder = currentFolder {
-            return Color(hex: folder.colorHex)
-        }
-        return AppColors.primary
     }
 
     // MARK: - Content
@@ -288,6 +279,10 @@ struct StoryEditorView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.body)
                         .foregroundStyle(.white.opacity(0.5))
+                        // 44pt to the finger without growing the banner.
+                        .padding(12)
+                        .contentShape(.rect)
+                        .padding(-12)
                 }
                 .accessibilityLabel("Cancel transcription")
             }
@@ -306,47 +301,20 @@ struct StoryEditorView: View {
 
     // MARK: - Tags
 
+    /// Progress for Auto-tag shows on its button, where the tap was; the
+    /// cloud only holds tags.
     private var tagCloud: some View {
         FlowLayout(spacing: 6) {
             ForEach(tags) { tag in
-                tagChip(tag)
-            }
-            if isExtractingTags {
-                HStack(spacing: 4) {
-                    VoiceLoader(size: .small).foregroundStyle(AppColors.primary)
-                    Text("Tagging…")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(AppColors.primary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                StoryTagPill(tag: tag, size: .small, onRemove: {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        tags.removeAll { $0.id == tag.id }
+                    }
+                    Haptics.light()
+                })
+                .transition(.scale.combined(with: .opacity))
             }
         }
-    }
-
-    private func tagChip(_ tag: StoryTag) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: tag.type.icon)
-                .font(.system(size: 9, weight: .semibold))
-            Text(tag.value)
-                .font(.caption2.weight(.medium))
-                .lineLimit(1)
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    tags.removeAll { $0.id == tag.id }
-                }
-                Haptics.light()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-        }
-        .foregroundStyle(tagColor(tag.type))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background { Capsule().fill(tagColor(tag.type).opacity(0.15)) }
-        .transition(.scale.combined(with: .opacity))
     }
 
     private var tagInputRow: some View {
@@ -385,7 +353,10 @@ struct StoryEditorView: View {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
                         .foregroundStyle(AppColors.primary)
+                        .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                        .contentShape(.rect)
                 }
+                .accessibilityLabel("Add tag")
             }
         }
         .padding(10)
@@ -393,33 +364,22 @@ struct StoryEditorView: View {
         .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 
-    private func tagColor(_ type: StoryTagType) -> Color {
-        switch type {
-        case .friend: return AppColors.categoryIndigo
-        case .date: return AppColors.categoryAmber
-        case .location: return AppColors.categorySage
-        case .topic: return AppColors.categoryPlum
-        case .custom: return AppColors.categoryNeutral
-        }
-    }
-
     // MARK: - Bottom Bar
 
+    /// Rides in the page's `.safeAreaBar`: no slab of its own.
     private var bottomBar: some View {
         VStack(spacing: 0) {
             formatRow
-            Divider().opacity(0.3)
             actionRow
         }
-        .background(.ultraThinMaterial)
     }
 
     private var formatRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                formatButton(icon: "bold") { richTextController.bold() }
-                formatButton(icon: "italic") { richTextController.italic() }
-                formatButton(icon: "underline") { richTextController.underline() }
+            HStack(spacing: 0) {
+                formatButton("Bold", icon: "bold") { richTextController.bold() }
+                formatButton("Italic", icon: "italic") { richTextController.italic() }
+                formatButton("Underline", icon: "underline") { richTextController.underline() }
 
                 Menu {
                     Button {
@@ -443,34 +403,39 @@ struct StoryEditorView: View {
                 } label: {
                     formatIcon("textformat")
                 }
+                .accessibilityLabel("Text style")
 
-                Divider().frame(height: 18).opacity(0.3)
+                Divider()
+                    .frame(height: 18)
+                    .opacity(0.3)
+                    .padding(.horizontal, 4)
 
-                formatButton(icon: "list.bullet") { richTextController.bulletList() }
-                formatButton(icon: "list.number") { richTextController.numberedList() }
-                formatButton(icon: "checklist") { richTextController.checklist() }
+                formatButton("Bulleted list", icon: "list.bullet") { richTextController.bulletList() }
+                formatButton("Numbered list", icon: "list.number") { richTextController.numberedList() }
+                formatButton("Checklist", icon: "checklist") { richTextController.checklist() }
 
                 Spacer(minLength: 8)
 
-                formatButton(icon: "keyboard.chevron.compact.down") {
+                formatButton("Hide keyboard", icon: "keyboard.chevron.compact.down") {
                     richTextController.dismissKeyboard()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
         }
     }
 
-    private func formatButton(icon: String, action: @escaping () -> Void) -> some View {
+    private func formatButton(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.light()
             action()
         } label: {
             formatIcon(icon)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel(label)
     }
 
+    /// A 36×32 plate inside a 44pt target.
     private func formatIcon(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 15, weight: .semibold))
@@ -480,114 +445,65 @@ struct StoryEditorView: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.white.opacity(0.08))
             }
+            .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+            .contentShape(.rect)
     }
 
     private var actionRow: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
             micToggle
 
             tagToggle
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            if llmService.isAvailable && !plainText.isEmpty && !isExtractingTags {
-                Button {
+            if llmService.isAvailable && !plainText.isEmpty {
+                GlassButton(
+                    title: autoTagNotice ?? "Auto-tag",
+                    icon: "sparkles",
+                    style: .secondary,
+                    size: .small,
+                    isLoading: isExtractingTags
+                ) {
                     Task { await extractTags() }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "sparkles")
-                        Text("Auto-tag")
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppColors.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background { Capsule().fill(AppColors.primary.opacity(0.15)) }
                 }
+                .disabled(autoTagNotice != nil)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, AppLayout.pageHorizontal)
+        .padding(.vertical, 8)
     }
 
     private var micToggle: some View {
-        Button {
+        GlassButton(
+            title: audioService.isRecording ? "Stop" : "Dictate",
+            icon: audioService.isRecording ? "stop.fill" : "mic.fill",
+            style: .secondary,
+            size: .small
+        ) {
             toggleRecording()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: audioService.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .symbolEffect(.pulse, isActive: audioService.isRecording)
-                Text(audioService.isRecording ? "Stop" : "Dictate")
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(audioService.isRecording ? AppColors.recording : AppColors.primary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background {
-                Capsule().fill(
-                    audioService.isRecording
-                        ? AppColors.recording.opacity(0.15)
-                        : AppColors.primary.opacity(0.1)
-                )
-            }
         }
         .disabled(isTranscribing || isDictationTransitioning)
     }
 
     private var tagToggle: some View {
-        Button {
+        GlassButton(title: "Tag", icon: "tag", style: .secondary, size: .small) {
             Haptics.light()
             withAnimation(.spring(response: 0.25)) {
                 showTagInput.toggle()
                 if showTagInput { focusedField = .tagValue }
             }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "tag")
-                Text("Tag")
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background { Capsule().fill(Color.white.opacity(0.06)) }
         }
     }
 
     // MARK: - More Menu
 
+    /// Practice, Warm-Up and Drill are not here: they open ContentView's
+    /// session cover and sheets, which cannot present over this sheet, so
+    /// they did nothing. The story's page owns them; a new story's page is
+    /// pushed when this editor closes (`onCreated`).
     private var moreMenu: some View {
         Menu {
-            if let story = draftStory ?? existingStory {
-                if let onStartPractice {
-                    Button {
-                        performSave()
-                        onStartPractice(story, .sixty)
-                    } label: {
-                        Label("Practice This", systemImage: "mic.fill")
-                    }
-                }
-                if let onSendToWarmUp {
-                    Button {
-                        performSave()
-                        onSendToWarmUp(story)
-                    } label: {
-                        Label("Send to Warm-Up", systemImage: "flame")
-                    }
-                }
-                if let onSendToDrill {
-                    Button {
-                        performSave()
-                        onSendToDrill(story)
-                    } label: {
-                        Label("Send to Drill", systemImage: "bolt")
-                    }
-                }
-
-                Divider()
-            }
-
             Button {
                 if draftStory == nil { ensureDraftForMove() }
                 showingMoveSheet = true
@@ -595,62 +511,39 @@ struct StoryEditorView: View {
                 Label("Move to Folder…", systemImage: "folder")
             }
 
-            Menu {
+            // Pickers, so each current value wears the system checkmark - a
+            // checkmark Image inside a menu button's label was dropped.
+            Picker(selection: $selectedEntryType) {
                 ForEach(StoryEntryType.allCases) { type in
-                    Button {
-                        selectedEntryType = type
-                        Haptics.light()
-                    } label: {
-                        HStack {
-                            Label(type.displayName, systemImage: type.icon)
-                            if selectedEntryType == type { Image(systemName: "checkmark") }
-                        }
-                    }
+                    Label(type.displayName, systemImage: type.icon)
+                        .tag(type)
                 }
             } label: {
-                Label("Type: \(selectedEntryType.displayName)", systemImage: "rectangle.stack")
+                Label("Type", systemImage: "rectangle.stack")
             }
+            .pickerStyle(.menu)
 
-            Menu {
+            Picker(selection: $selectedStage) {
                 ForEach(StoryStage.allCases) { stage in
-                    Button {
-                        selectedStage = stage
-                        Haptics.light()
-                    } label: {
-                        HStack {
-                            Label(stage.displayName, systemImage: stage.icon)
-                            if selectedStage == stage { Image(systemName: "checkmark") }
-                        }
-                    }
+                    Label(stage.displayName, systemImage: stage.icon)
+                        .tag(stage)
                 }
             } label: {
-                Label("Stage: \(selectedStage.displayName)", systemImage: "flag")
+                Label("Stage", systemImage: "flag")
             }
+            .pickerStyle(.menu)
 
-            Menu {
-                Button {
-                    selectedOccasion = nil
-                    Haptics.light()
-                } label: {
-                    HStack {
-                        Text("None")
-                        if selectedOccasion == nil { Image(systemName: "checkmark") }
-                    }
-                }
+            Picker(selection: $selectedOccasion) {
+                Text("None")
+                    .tag(StoryOccasion?.none)
                 ForEach(StoryOccasion.allCases) { occasion in
-                    Button {
-                        selectedOccasion = occasion
-                        Haptics.light()
-                    } label: {
-                        HStack {
-                            Label(occasion.rawValue, systemImage: occasion.icon)
-                            if selectedOccasion == occasion { Image(systemName: "checkmark") }
-                        }
-                    }
+                    Label(occasion.rawValue, systemImage: occasion.icon)
+                        .tag(StoryOccasion?.some(occasion))
                 }
             } label: {
-                Label(selectedOccasion == nil ? "Occasion" : "Occasion: \(selectedOccasion!.rawValue)", systemImage: "sparkles")
+                Label("Occasion", systemImage: "sparkles")
             }
+            .pickerStyle(.menu)
 
             if draftStory != nil || existingStory != nil {
                 Divider()
@@ -664,6 +557,7 @@ struct StoryEditorView: View {
             Image(systemName: "ellipsis.circle")
                 .font(.body.weight(.semibold))
         }
+        .accessibilityLabel("More")
     }
 
     // MARK: - Auto-Save
@@ -678,6 +572,8 @@ struct StoryEditorView: View {
     }
 
     private func performAutoSave() {
+        // A late dictation result after closing must not recreate a draft.
+        guard !isFinished else { return }
         let trimmedContent = plainText.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedContent.isEmpty || !trimmedTitle.isEmpty else { return }
@@ -706,15 +602,7 @@ struct StoryEditorView: View {
         }
     }
 
-    private func performSave() {
-        let trimmedContent = plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedContent.isEmpty && trimmedTitle.isEmpty { return }
-
-        if draftStory == nil { ensureDraftForMove() }
-
-        guard let draft = draftStory else { return }
-
+    private func save(_ draft: Story) {
         let resolvedTitle = title.isEmpty ? autoTitle(from: plainText) : title
         viewModel.updateStory(
             draft,
@@ -737,28 +625,47 @@ struct StoryEditorView: View {
         moveSheetSelectionToken = UUID()
     }
 
+    /// Runs once, when the editor goes away: the close button, a swipe down,
+    /// or `onDisappear` after either (`isFinished` makes the second call a
+    /// no-op).
     private func finalSave() {
+        guard !isFinished else { return }
+        isFinished = true
         autoSaveTask?.cancel()
-        let trimmedContent = plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if let draft = draftStory {
-            if trimmedContent.isEmpty && trimmedTitle.isEmpty {
-                viewModel.deleteIfEmpty(draft)
-            } else {
-                performSave()
+        let isEmpty = plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-                if tags.isEmpty && llmService.isAvailable && !plainText.isEmpty {
-                    let vm = viewModel
-                    let svc = llmService
-                    let savedStory = draft
-                    let capturedContent = plainText
-                    Task.detached { @MainActor in
-                        let extracted = await vm.autoExtractTags(from: capturedContent, llmService: svc)
-                        guard !extracted.isEmpty else { return }
-                        vm.appendTags(to: savedStory, tags: extracted)
-                    }
-                }
+        // Typed and closed inside the 2s autosave window: no draft exists
+        // yet, and the text used to be dropped.
+        if draftStory == nil && !isEmpty {
+            ensureDraftForMove()
+        }
+        guard let draft = draftStory else { return }
+
+        if isEmpty && existingStory == nil {
+            // A draft this editor created and the writer emptied. An existing
+            // story is never deleted for being empty - that was a delete with
+            // no confirmation, and its takes lost their subject.
+            draftStory = nil
+            viewModel.deleteStory(draft)
+            return
+        }
+
+        save(draft)
+        if existingStory == nil {
+            onCreated?(draft)
+        }
+
+        if tags.isEmpty && llmService.isAvailable && !plainText.isEmpty {
+            let vm = viewModel
+            let svc = llmService
+            let savedStory = draft
+            let capturedContent = plainText
+            Task.detached { @MainActor in
+                let extracted = await vm.autoExtractTags(from: capturedContent, llmService: svc)
+                guard !extracted.isEmpty else { return }
+                vm.appendTags(to: savedStory, tags: extracted)
             }
         }
     }
@@ -979,13 +886,29 @@ struct StoryEditorView: View {
         defer { isExtractingTags = false }
 
         let extracted = await viewModel.autoExtractTags(from: plainText, llmService: llmService)
-        if !extracted.isEmpty {
-            withAnimation(.spring(response: 0.3)) {
-                for tag in extracted where !tags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
-                    tags.append(tag)
-                }
+        let countBefore = tags.count
+        withAnimation(.spring(response: 0.3)) {
+            for tag in extracted where !tags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
+                tags.append(tag)
             }
-            Haptics.success()
+        }
+
+        guard tags.count > countBefore else {
+            // A pass that adds nothing used to end in silence: the button
+            // came back and the page looked unchanged.
+            Haptics.warning()
+            showAutoTagNotice("No tags found")
+            return
+        }
+        Haptics.success()
+    }
+
+    private func showAutoTagNotice(_ message: String) {
+        autoTagNotice = message
+        UIAccessibility.post(notification: .announcement, argument: message)
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            autoTagNotice = nil
         }
     }
 
@@ -1011,8 +934,13 @@ struct StoryEditorView: View {
         return unique
     }
 
+    /// The first line's first six words. Splitting the whole text on spaces
+    /// kept newlines inside the "words", so "Toast⏎⏎Good evening…" became a
+    /// title that ran over three lines.
     private func autoTitle(from text: String) -> String {
-        let words = text.split(separator: " ").prefix(6).joined(separator: " ")
+        let firstLine = text.split(whereSeparator: \.isNewline)
+            .first { !$0.allSatisfy(\.isWhitespace) } ?? ""
+        let words = firstLine.split(whereSeparator: \.isWhitespace).prefix(6).joined(separator: " ")
         if words.count > 40 { return String(words.prefix(40)) + "…" }
         return words.isEmpty ? "Untitled" : words
     }

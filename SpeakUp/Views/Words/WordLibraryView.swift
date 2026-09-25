@@ -40,7 +40,10 @@ struct WordLibraryView: View {
                 entry: entry,
                 pronunciation: pronunciation,
                 isSaved: isSaved(entry.word),
-                onAdd: { add(entry.word) },
+                onAdd: {
+                    add(entry.word)
+                    return isSaved(entry.word) ? nil : (viewModel.vocabWordError ?? "Couldn't add that word")
+                },
                 onRemove: { viewModel.removeVocabWord(entry.word) }
             )
             .presentationDetents([.medium, .large])
@@ -60,10 +63,15 @@ struct WordLibraryView: View {
         let tiers = Dictionary(
             uniqueKeysWithValues: WordLibraryTier.allCases.map { ($0, matchingCatalog(in: $0)) }
         )
-        let unknown = unmatchedQuery
+        // A new word gets one of two doors. The dictionary check is the slow
+        // part, so it runs once per pass and only for a word the app lacks.
+        let newWord = newWordQuery
+        let definable = newWord.map { PronunciationService.canDefine($0) } ?? false
+        let unknown = definable ? newWord : nil
+        let addable = definable ? nil : newWord
         let saved = savedKeys
         let isEmpty = !trimmedQuery.isEmpty
-            && unknown == nil
+            && newWord == nil
             && ownWords.isEmpty
             && tiers.values.allSatisfy(\.isEmpty)
 
@@ -78,20 +86,34 @@ struct WordLibraryView: View {
                     EmptyView()
                 }
 
+                // Why an add was refused - filler, duplicate, blocked. The
+                // bank's own add only buzzed, and the page never said why.
+                if let error = viewModel.vocabWordError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.warning)
+                        .padding(.horizontal, 4)
+                }
+
                 if let unknown {
                     lookupCard(unknown)
                         .padding(.top, Self.sectionSpacing - Self.rowSpacing)
                 }
 
+                if let addable {
+                    addWordCard(addable)
+                        .padding(.top, Self.sectionSpacing - Self.rowSpacing)
+                }
+
                 if !ownWords.isEmpty {
-                    sectionHeader(title: "Your words", icon: "bookmark.fill", count: ownWords.count)
+                    sectionHeader(title: "Your words", count: ownWords.count)
                     rows(ownWords, saved: saved)
                 }
 
                 ForEach(WordLibraryTier.allCases) { tier in
                     let entries = tiers[tier] ?? []
                     if !entries.isEmpty {
-                        sectionHeader(title: tier.title, icon: tier.icon, count: entries.count)
+                        sectionHeader(title: tier.title, count: entries.count)
                         rows(entries, saved: saved)
                     }
                 }
@@ -118,8 +140,8 @@ struct WordLibraryView: View {
     private static let sectionSpacing: CGFloat = 18
     private static let headerToRowSpacing: CGFloat = 10
 
-    private func sectionHeader(title: String, icon: String, count: Int) -> some View {
-        GlassSectionHeader(title, icon: icon) {
+    private func sectionHeader(title: String, count: Int) -> some View {
+        GlassSectionHeader(title) {
             Text("\(count)")
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
@@ -180,6 +202,42 @@ struct WordLibraryView: View {
         .accessibilityLabel("Look up \(word)")
     }
 
+    /// The other fall-through: a word this device's dictionary cannot define -
+    /// a misspelling, a name, jargon, or no dictionary downloaded yet. The
+    /// lookup card needs a definition, so the search used to dead-end on
+    /// "search a single word" right after the reader had. The bank does not
+    /// need a definition to keep a word.
+    private func addWordCard(_ word: String) -> some View {
+        Button {
+            // `addVocabWord` plays its own success / warning.
+            add(word)
+        } label: {
+            GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.08), padding: 14) {
+                HStack(spacing: 12) {
+                    IconChip(icon: "plus", size: 32)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Add \u{201C}\(word)\u{201D} to your words")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Text("No dictionary entry on this device")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+
+                    Spacer(minLength: 8)
+                }
+            }
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("Add \(word) to your words")
+        .accessibilityHint("No dictionary entry on this device")
+    }
+
     // MARK: - Data
 
     private var trimmedQuery: String {
@@ -227,13 +285,12 @@ struct WordLibraryView: View {
             .map { WordLibraryEntry(word: $0, gloss: nil, prompt: nil, tier: nil) }
     }
 
-    /// A one-word search that matched nothing by name. A multi-word query is
-    /// not a dictionary headword, so it gets no lookup card.
-    private var unmatchedQuery: String? {
+    /// A one-word search that is in neither the catalog nor the bank. A
+    /// multi-word query is not a headword, so it gets no card.
+    private var newWordQuery: String? {
         let word = trimmedQuery
         guard word.count >= 2,
-              !word.contains(" "),
-              PronunciationService.canDefine(word) else { return nil }
+              !word.contains(where: \.isWhitespace) else { return nil }
         let key = word.lowercased()
         let inBank = viewModel.vocabWords.contains { $0.lowercased() == key }
         return (catalogKeys.contains(key) || inBank) ? nil : word
@@ -252,6 +309,11 @@ struct WordLibraryView: View {
     private func add(_ word: String) {
         viewModel.newVocabWord = word
         viewModel.addVocabWord()
+        // The refusal shows under the search field, away from VoiceOver's
+        // focus on the button that was tapped.
+        if let error = viewModel.vocabWordError {
+            UIAccessibility.post(notification: .announcement, argument: error)
+        }
     }
 }
 
@@ -285,14 +347,6 @@ enum WordLibraryTier: Int, CaseIterable, Identifiable {
         }
     }
 
-    var icon: String {
-        switch self {
-        case .everyday: return "text.bubble"
-        case .sharper: return "sparkles"
-        case .advanced: return "graduationcap"
-        }
-    }
-
     var tint: Color {
         switch self {
         case .everyday: return AppColors.categorySage
@@ -312,37 +366,47 @@ private struct WordLibraryRow: View {
 
     private var tint: Color { entry.tier?.tint ?? AppColors.categoryNeutralCool }
 
-    /// Two sibling buttons inside one card, not a button inside a button:
-    /// nesting them makes which one a tap reaches a matter of luck.
+    private static let inset: CGFloat = 12
+
+    /// Two sibling buttons on one card, not a button inside a button:
+    /// nesting them makes which one a tap reaches a matter of luck. The add
+    /// control floats over the trailing edge of the open button, which spans
+    /// the card so the whole row lights up when pressed - `.plain` gave no
+    /// sign a tap had landed.
     var body: some View {
-        GlassCard(cornerRadius: 14, padding: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Button(action: onOpen) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(entry.word)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
+        GlassCard(cornerRadius: 14, padding: 0) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.word)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
 
-                        Text(entry.gloss ?? "Your word. Tap for the definition.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget - 12, alignment: .leading)
-                    .contentShape(Rectangle())
+                    // Not every bank word has a dictionary entry, so the
+                    // fallback promises only what the sheet always has.
+                    Text(entry.gloss ?? "Your word. Tap to hear it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(entry.word)
-                .accessibilityValue(entry.gloss ?? (isSaved ? "In your words" : ""))
-                .accessibilityHint("Opens the definition")
-
-                addControl
+                .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .topLeading)
+                .padding(Self.inset)
+                // Room for the add control over the trailing edge.
+                .padding(.trailing, AppLayout.minHitTarget + Self.inset)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(RowPressStyle())
+            .clipShape(.rect(cornerRadius: 14))
+            .accessibilityLabel(entry.word)
+            .accessibilityValue(entry.gloss ?? (isSaved ? "In your words" : ""))
+            .accessibilityHint("Opens the word")
+            .overlay(alignment: .topTrailing) {
+                addControl
+                    .padding([.top, .trailing], Self.inset)
+            }
         }
     }
 
@@ -352,20 +416,20 @@ private struct WordLibraryRow: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.body)
                 .foregroundStyle(AppColors.success)
-                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget - 12)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                 .accessibilityLabel("In your words")
         } else {
             Button {
-                Haptics.light()
+                // `addVocabWord` plays its own success / warning.
                 onAdd()
             } label: {
                 Image(systemName: "plus.circle")
                     .font(.body)
                     .foregroundStyle(tint)
-                    .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget - 12)
+                    .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
             .accessibilityLabel("Add \(entry.word) to your words")
         }
     }
@@ -377,18 +441,24 @@ private struct WordLibraryDetailSheet: View {
     let entry: WordLibraryEntry
     let pronunciation: PronunciationService
     let isSaved: Bool
-    let onAdd: () -> Void
+    /// Returns why the word was refused - filler, duplicate, blocked - or nil
+    /// once it is in the bank.
+    let onAdd: () -> String?
     let onRemove: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var showingDictionary = false
     @State private var savedLocally: Bool
+    @State private var addError: String?
+    /// Read once: the dictionary check is not free, and the answer does not
+    /// change while the sheet is open.
+    private let canDefine: Bool
 
     init(
         entry: WordLibraryEntry,
         pronunciation: PronunciationService,
         isSaved: Bool,
-        onAdd: @escaping () -> Void,
+        onAdd: @escaping () -> String?,
         onRemove: @escaping () -> Void
     ) {
         self.entry = entry
@@ -397,6 +467,51 @@ private struct WordLibraryDetailSheet: View {
         self.onAdd = onAdd
         self.onRemove = onRemove
         _savedLocally = State(initialValue: isSaved)
+        canDefine = PronunciationService.canDefine(entry.word)
+    }
+
+    private var actions: some View {
+        VStack(spacing: 10) {
+            if let addError {
+                Text(addError)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.warning)
+                    .transition(.opacity)
+            }
+
+            // Hidden, not disabled: GlassButton has no disabled look, so a
+            // word with no dictionary entry showed a button that did nothing.
+            if canDefine {
+                GlassButton(
+                    title: "Full definition",
+                    icon: "book.fill",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
+                    Haptics.light()
+                    showingDictionary = true
+                }
+            }
+
+            GlassButton(
+                title: savedLocally ? "Remove from your words" : "Add to your words",
+                icon: savedLocally ? "bookmark.slash" : "bookmark.fill",
+                style: savedLocally ? .secondary : .primary,
+                fullWidth: true
+            ) {
+                // The bank's own add plays success or warning; no second tap here.
+                if savedLocally {
+                    Haptics.light()
+                    onRemove()
+                    savedLocally = false
+                } else {
+                    withAnimation(AppMotion.snap) { addError = onAdd() }
+                    savedLocally = addError == nil
+                }
+            }
+        }
+        .padding(.horizontal, AppLayout.pageHorizontal)
+        .padding(.vertical, 10)
     }
 
     var body: some View {
@@ -415,39 +530,20 @@ private struct WordLibraryDetailSheet: View {
                         if let prompt = entry.prompt {
                             promptCard(prompt)
                         }
-
-                        GlassButton(
-                            title: "Full definition",
-                            icon: "book.fill",
-                            style: .secondary,
-                            fullWidth: true
-                        ) {
-                            Haptics.light()
-                            showingDictionary = true
-                        }
-                        .disabled(!PronunciationService.canDefine(entry.word))
-
-                        GlassButton(
-                            title: savedLocally ? "Remove from your words" : "Add to your words",
-                            icon: savedLocally ? "bookmark.slash" : "bookmark.fill",
-                            style: savedLocally ? .secondary : .primary,
-                            fullWidth: true
-                        ) {
-                            Haptics.medium()
-                            if savedLocally { onRemove() } else { onAdd() }
-                            savedLocally.toggle()
-                        }
                     }
                     .padding(.top, 8)
                     .pageContentInsets()
                 }
                 .scrollIndicators(.hidden)
+                // Pinned: the sheet opens at the medium detent, which cut the
+                // primary "Add to your words" in half below the fold.
+                .safeAreaBar(edge: .bottom) { actions }
             }
             .navigationTitle(entry.word)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .close) { dismiss() }
                 }
             }
             .sheet(isPresented: $showingDictionary) {
@@ -482,7 +578,9 @@ private struct WordLibraryDetailSheet: View {
                         .font(.title3)
                         .foregroundStyle(AppColors.primary)
                         .frame(width: 48, height: 48)
-                        .background { Circle().fill(.ultraThinMaterial) }
+                        // Painted, not glass: this sits on a GlassCard (rule 13b).
+                        .background { Circle().fill(Color.white.opacity(0.10)) }
+                        .overlay { Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
                 }
                 .buttonStyle(GlassPressStyle())
                 .disabled(pronunciation.isSpeaking)
@@ -508,7 +606,7 @@ private struct WordLibraryDetailSheet: View {
     }
 
     private func promptCard(_ prompt: String) -> some View {
-        GlassCard(tint: AppColors.categorySage.opacity(0.08), padding: 16) {
+        GlassCard(tint: AppColors.categorySage.opacity(0.06), padding: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Say it out loud")
                     .eyebrowStyle()
@@ -523,51 +621,7 @@ private struct WordLibraryDetailSheet: View {
     }
 }
 
-// MARK: - Entry row for the Tools landing
-
-/// The door on Library → Tools. A full-width row rather than a fifth tile:
-/// the practice grid is four tools that open the mic, and a word list is not
-/// one of them.
-struct WordLibraryEntryRow: View {
-    private var summary: String {
-        "\(DefaultVocabLexicon.entries.count) words"
-    }
-
-    var body: some View {
-        NavigationLink(value: WordLibraryRoute()) {
-            GlassCard(cornerRadius: 16, tint: AppColors.categorySage.opacity(0.07), padding: 14) {
-                HStack(spacing: 12) {
-                    IconChip(icon: "character.book.closed.fill", tint: AppColors.categorySage, size: 36)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Words")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-
-                        Text("Look up a word, keep the ones worth using")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-
-                        Text(summary)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .padding(.top, 1)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(GlassPressStyle())
-        .accessibilityLabel("Words. Look up a word, keep the ones worth using. \(summary).")
-    }
-}
+// MARK: - Route
 
 /// Route value so the row can push from inside Library's own stack.
 struct WordLibraryRoute: Hashable {}

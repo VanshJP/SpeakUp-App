@@ -214,6 +214,18 @@ struct GlassPressStyle: ButtonStyle {
     }
 }
 
+/// Pressed state for a row inside a `GlassRowGroup`. Scaling one row would
+/// tear it away from its neighbours, so the row lights up edge to edge
+/// instead, and the light fades out on release the way a table cell's does.
+/// Rows used `.plain`, which gave no sign a tap had landed at all.
+struct RowPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(Color.white.opacity(configuration.isPressed ? 0.07 : 0))
+            .animation(configuration.isPressed ? nil : .easeOut(duration: 0.3), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Glass Buttons") {

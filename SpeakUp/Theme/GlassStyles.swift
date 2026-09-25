@@ -43,24 +43,21 @@ extension View {
 
 // MARK: - Glass Section Header
 
+/// A page chapter's name. Text only: the grey glyph each header used to carry
+/// was decoration (an ellipsis for "Review", a wrench for "Prep tools"), and
+/// half the headers had one while History's weeks and Learn's chapters did
+/// not, so the same role wore two faces across the tabs.
 struct GlassSectionHeader<Accessory: View>: View {
     let title: String
-    let icon: String?
     var accessory: Accessory
 
-    init(_ title: String, icon: String? = nil, @ViewBuilder accessory: () -> Accessory) {
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
-        self.icon = icon
         self.accessory = accessory()
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
             Text(title)
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.92))
@@ -74,9 +71,29 @@ struct GlassSectionHeader<Accessory: View>: View {
 }
 
 extension GlassSectionHeader where Accessory == EmptyView {
-    init(_ title: String, icon: String? = nil) {
-        self.init(title, icon: icon) { EmptyView() }
+    init(_ title: String) {
+        self.init(title) { EmptyView() }
     }
+}
+
+// MARK: - Row Label Style
+
+/// A settings row's name: its glyph in a fixed column, so every title on a
+/// card starts on the same line whatever each symbol's width. Plain `Label`s
+/// drifted by up to 10pt - "Audio Cues" sat right of "Speaker Level" on the
+/// same card. Apply it to the card, not each row.
+struct RowLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.icon
+                .frame(width: 24)
+            configuration.title
+        }
+    }
+}
+
+extension LabelStyle where Self == RowLabelStyle {
+    static var row: RowLabelStyle { RowLabelStyle() }
 }
 
 // MARK: - Glass Card Title

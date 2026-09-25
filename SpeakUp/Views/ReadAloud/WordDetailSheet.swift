@@ -28,8 +28,13 @@ struct WordDetail: Identifiable {
 struct WordDetailSheet: View {
     let detail: WordDetail
     let pronunciationService: PronunciationService
-    var micActive: Bool = false
+    /// Plays the word. The live session passes one that holds the mic first -
+    /// a live recogniser would score the synthesiser as the reader - and
+    /// brings it back when the word ends, exactly as "Hear it" does. Nil
+    /// plays it straight away: the result screen has no mic to hold.
+    var onHear: (() -> Void)? = nil
 
+    @Environment(\.dismiss) private var dismiss
     @State private var showingDictionary = false
 
     private var cleanedWord: String {
@@ -37,73 +42,63 @@ struct WordDetailSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            AppBackground(style: .subtle)
+        NavigationStack {
+            ZStack {
+                AppBackground(style: .subtle)
 
-            VStack(spacing: 20) {
-                GlassCard {
-                    VStack(spacing: 14) {
-                        HStack(spacing: 16) {
-                            MarkedWordText.make(
-                                cleanedWord,
-                                marking: detail.slip?.letters,
-                                base: .white,
-                                mark: AppColors.error
-                            )
-                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                // Scrolls: at large text sizes the slip's tip outgrew the
+                // fixed-height sheet it used to sit in.
+                PageScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        GlassCard {
+                            VStack(spacing: 14) {
+                                HStack(spacing: 16) {
+                                    MarkedWordText.make(
+                                        cleanedWord,
+                                        marking: detail.slip?.letters,
+                                        base: .white,
+                                        mark: AppColors.error
+                                    )
+                                    .font(.system(size: 36, weight: .bold, design: .rounded))
 
-                            if !micActive {
-                                Button {
-                                    Haptics.light()
-                                    pronunciationService.speak(word: detail.word)
-                                } label: {
-                                    Image(systemName: pronunciationService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                        .font(.system(size: 26))
-                                        .foregroundStyle(AppColors.primary)
-                                        .frame(width: 50, height: 50)
-                                        .background {
-                                            Circle().fill(.ultraThinMaterial)
-                                        }
+                                    speakerButton
                                 }
-                                .disabled(pronunciationService.isSpeaking)
+
+                                stateIndicator
+
+                                if let slip = detail.slip {
+                                    slipExplanation(slip)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+
+                        if PronunciationService.canDefine(detail.word) {
+                            GlassButton(
+                                title: "Full definition",
+                                icon: "book.fill",
+                                style: .secondary,
+                                fullWidth: true
+                            ) {
+                                Haptics.light()
+                                showingDictionary = true
                             }
                         }
-
-                        if micActive {
-                            HStack(spacing: 6) {
-                                Image(systemName: "mic.slash")
-                                    .font(.caption)
-                                Text("Stop session to hear pronunciation")
-                                    .font(.caption)
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-
-                        stateIndicator
-
-                        if let slip = detail.slip {
-                            slipExplanation(slip)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-
-                if PronunciationService.canDefine(detail.word) {
-                    GlassButton(
-                        title: "View Definition",
-                        icon: "book.fill",
-                        style: .secondary
-                    ) {
-                        Haptics.light()
-                        showingDictionary = true
                     }
                     .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 20)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
+            .navigationTitle(cleanedWord)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
         }
-        .presentationDetents(detail.slip == nil ? [.height(320)] : [.height(440), .large])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showingDictionary) {
             DictionaryView(term: detail.word)
@@ -111,6 +106,30 @@ struct WordDetailSheet: View {
         .onDisappear {
             pronunciationService.stop()
         }
+    }
+
+    // MARK: - Speaker
+
+    private var speakerButton: some View {
+        Button {
+            Haptics.light()
+            if let onHear {
+                onHear()
+            } else {
+                pronunciationService.speak(word: detail.word)
+            }
+        } label: {
+            Image(systemName: pronunciationService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 26))
+                .foregroundStyle(AppColors.primary)
+                .frame(width: 50, height: 50)
+                // Painted, not glass: this sits on a GlassCard (rule 13b).
+                .background { Circle().fill(Color.white.opacity(0.10)) }
+                .overlay { Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
+        }
+        .buttonStyle(GlassPressStyle())
+        .disabled(pronunciationService.isSpeaking)
+        .accessibilityLabel("Hear \(cleanedWord)")
     }
 
     // MARK: - Consonant

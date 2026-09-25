@@ -39,7 +39,7 @@ struct RecordingLookPreview: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .background { Circle().fill(.ultraThinMaterial) }
+                    .glassCircle()
             }
             .accessibilityLabel("Close preview")
             .padding(.leading, 20)
@@ -100,10 +100,7 @@ struct RecordingLookPreview: View {
 
     private func phaseLabel(_ text: String) -> some View {
         Text(text)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.55))
-            .textCase(.uppercase)
-            .tracking(1.2)
+            .eyebrowStyle(.white.opacity(0.55))
     }
 
     // MARK: - Controls
@@ -125,15 +122,10 @@ struct RecordingLookPreview: View {
                 .accessibilityLabel(isRecording ? "Stop preview" : "Skip to recording")
             }
 
+            // A plain caption, as on the session screen it previews.
             Text(isRecording ? "Tap to stop" : "Tap to skip ahead")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.75))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                }
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.6))
         }
         .padding(.bottom, 8)
         .accessibilityElement(children: .contain)

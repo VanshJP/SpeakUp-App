@@ -157,7 +157,7 @@ class LiveTranscriptionService {
     /// Call this AFTER the AVAudioRecorder has started so the session is active.
     ///
     /// Wire input + tap *before* `engine.start()`. Starting an empty graph
-    /// while AVAudioRecorder already owns the mic (common on "Start Now"
+    /// while AVAudioRecorder already owns the mic (common on "Start now"
     /// during countdown) makes `AVAudioEngineGraph::Initialize` raise an
     /// NSException that Swift `do/catch` cannot catch - abort.
     @MainActor

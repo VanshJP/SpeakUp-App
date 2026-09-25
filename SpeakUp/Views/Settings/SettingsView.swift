@@ -8,12 +8,13 @@ struct SettingsView: View {
 
     var body: some View {
         PageScrollView {
-            VStack(spacing: AppLayout.listSpacing) {
+            VStack(spacing: AppLayout.chapterSpacing) {
+                PageTitle(kicker: "Big Talk", title: "Settings")
+
                 practiceSection
                 appearanceSection
                 accountSection
-
-                aboutFooter
+                aboutSection
             }
             .padding(.top, 8)
             .pageContentInsets()
@@ -28,9 +29,7 @@ struct SettingsView: View {
     // MARK: - Practice
 
     private var practiceSection: some View {
-        VStack(spacing: 12) {
-            GlassSectionHeader("Practice", icon: "waveform")
-
+        settingsGroup("Practice") {
             settingsLink(
                 icon: "slider.horizontal.3",
                 iconColor: AppColors.primary,
@@ -52,7 +51,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "waveform.badge.magnifyingglass",
-                iconColor: AppColors.categoryNeutralCool,
+                iconColor: AppColors.info,
                 title: "Analysis",
                 subtitle: "Tune pace, fillers, and score weights"
             ) {
@@ -72,7 +71,7 @@ struct SettingsView: View {
                 icon: "list.bullet.rectangle",
                 iconColor: AppColors.categoryTeal,
                 title: "Word Lists",
-                subtitle: "Add vocab, dictation, and filler words"
+                subtitle: "Add words, names, and fillers"
             ) {
                 WordBankView(viewModel: viewModel, showDismissButton: false)
             }
@@ -100,10 +99,7 @@ struct SettingsView: View {
     // MARK: - Appearance
 
     private var appearanceSection: some View {
-        VStack(spacing: 12) {
-            GlassSectionHeader("Appearance", icon: "paintpalette.fill")
-                .padding(.top, 4)
-
+        settingsGroup("Appearance") {
             settingsLink(
                 icon: "paintpalette.fill",
                 iconColor: AppColors.categoryIndigo,
@@ -161,10 +157,7 @@ struct SettingsView: View {
     // MARK: - Account
 
     private var accountSection: some View {
-        VStack(spacing: 12) {
-            GlassSectionHeader("Account & data", icon: "person.crop.circle")
-                .padding(.top, 4)
-
+        settingsGroup("Account & data") {
             settingsLink(
                 icon: "person.crop.circle",
                 iconColor: AppColors.primary,
@@ -185,7 +178,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "cpu",
-                iconColor: AppColors.info,
+                iconColor: AppColors.categoryIndigo,
                 title: "AI Features",
                 subtitle: aiModelSubtitle
             ) {
@@ -207,35 +200,22 @@ struct SettingsView: View {
 
     // MARK: - About
 
-    private var aboutFooter: some View {
-        NavigationLink {
-            AboutSettingsView()
-                .restoresNavigationBar()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "info.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Text("About Big Talk")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text("v\(viewModel.appVersion) (\(viewModel.buildNumber))")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+    private var aboutSection: some View {
+        settingsGroup(nil) {
+            settingsLink(
+                icon: "info.circle",
+                iconColor: AppColors.accent,
+                title: "About Big Talk",
+                subtitle: "Privacy, support, and diagnostics",
+                accessory: {
+                    Text("v\(viewModel.appVersion) (\(viewModel.buildNumber))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+            ) {
+                AboutSettingsView()
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 14)
-        .padding(.top, 2)
     }
 
     // MARK: - iCloud Sync
@@ -244,54 +224,54 @@ struct SettingsView: View {
     @State private var showingSyncRestartAlert = false
 
     private var iCloudSyncRow: some View {
-        GlassCard(padding: 14) {
-            VStack(spacing: 12) {
-                HStack(spacing: 14) {
-                    IconChip(icon: "icloud.fill", tint: AppColors.categoryBrandBright, size: 32)
+        VStack(spacing: 12) {
+            HStack(spacing: 14) {
+                IconChip(icon: "icloud.fill", tint: AppColors.categoryBrandBright, size: Self.rowIconSize)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("iCloud Sync")
-                            .font(.subheadline.weight(.semibold))
-                        Text(iCloudSyncSubtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if !ICloudStorageService.shared.hasResolvedContainer {
-                        VoiceLoader(size: .small)
-                            .foregroundStyle(.secondary)
-                    } else if ICloudStorageService.shared.isICloudReachable {
-                        Toggle("", isOn: $iCloudSyncEnabled)
-                            .labelsHidden()
-                            .tint(AppColors.primary)
-                            .onChange(of: iCloudSyncEnabled) { _, newValue in
-                                ICloudStorageService.shared.isSyncEnabled = newValue
-                                if let settings = viewModel.settings {
-                                    settings.iCloudSyncEnabled = newValue
-                                }
-                                showingSyncRestartAlert = true
-                            }
-                    } else {
-                        Image(systemName: "exclamationmark.circle")
-                            .foregroundStyle(AppColors.warning)
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("iCloud Sync")
+                        .font(.subheadline.weight(.semibold))
+                    Text(iCloudSyncSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                if iCloudSyncEnabled && ICloudStorageService.shared.isICloudAvailable {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(AppColors.success)
-                        Text("Recordings and data sync across all your devices")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer()
+
+                if !ICloudStorageService.shared.hasResolvedContainer {
+                    VoiceLoader(size: .small)
+                        .foregroundStyle(.secondary)
+                } else if ICloudStorageService.shared.isICloudReachable {
+                    Toggle("", isOn: $iCloudSyncEnabled)
+                        .labelsHidden()
+                        .tint(AppColors.primary)
+                        .onChange(of: iCloudSyncEnabled) { _, newValue in
+                            ICloudStorageService.shared.isSyncEnabled = newValue
+                            if let settings = viewModel.settings {
+                                settings.iCloudSyncEnabled = newValue
+                            }
+                            showingSyncRestartAlert = true
+                        }
+                } else {
+                    Image(systemName: "exclamationmark.circle")
+                        .foregroundStyle(AppColors.warning)
                 }
             }
+
+            if iCloudSyncEnabled && ICloudStorageService.shared.isICloudAvailable {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(AppColors.success)
+                    Text("Recordings and data sync across all your devices")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+        .padding(.horizontal, Self.rowPadding)
+        .padding(.vertical, 12)
         .alert("Restart Required", isPresented: $showingSyncRestartAlert) {
             Button("OK") {}
         } message: {
@@ -336,6 +316,28 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Rows
+
+    private static let rowIconSize: CGFloat = 30
+    private static let rowPadding: CGFloat = 14
+
+    /// A section of the hub: its name, then its rows on one plate.
+    private func settingsGroup<Rows: View>(
+        _ title: String?,
+        @ViewBuilder rows: () -> Rows
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let title {
+                GlassSectionHeader(title)
+            }
+
+            // Rules start under the row text, past the icon and its gap.
+            GlassRowGroup(dividerInset: Self.rowPadding + Self.rowIconSize + 14) {
+                rows()
+            }
+        }
+    }
+
     private func settingsLink<Destination: View, Accessory: View>(
         icon: String,
         iconColor: Color,
@@ -348,40 +350,36 @@ struct SettingsView: View {
             destination()
                 .restoresNavigationBar()
         } label: {
-            GlassCard(padding: 14) {
-                HStack(spacing: 14) {
-                    IconChip(icon: icon, tint: iconColor, size: 32)
+            HStack(spacing: 14) {
+                IconChip(icon: icon, tint: iconColor, size: Self.rowIconSize)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
 
-                        if let subtitle {
-                            Text(subtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        } else {
-                            Text(" ")
-                                .font(.caption)
-                                .opacity(0)
-                        }
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-
-                    Spacer(minLength: 8)
-
-                    accessory()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+
+                Spacer(minLength: 8)
+
+                accessory()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, Self.rowPadding)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowPressStyle())
     }
 }
 
@@ -396,64 +394,63 @@ struct AboutSettingsView: View {
             AppBackground()
 
             PageScrollView {
-                VStack(spacing: 12) {
-                    GlassCard(padding: 14) {
+                VStack(spacing: AppLayout.listSpacing) {
+                    GlassRowGroup(dividerInset: 14) {
                         HStack {
                             Label("Version", systemImage: "info.circle")
                                 .font(.subheadline.weight(.medium))
                             Spacer()
                             Text("\(appVersion) (\(buildNumber))")
-                                .font(.subheadline)
+                                .font(.subheadline.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
-                        .frame(minHeight: 32)
+                        .padding(14)
+                        .frame(minHeight: 52)
+
+                        NavigationLink {
+                            PrivacyDataView()
+                        } label: {
+                            aboutRow("Privacy & Data", icon: "hand.raised", trailingIcon: "chevron.right")
+                        }
+                        .buttonStyle(RowPressStyle())
+
+                        NavigationLink {
+                            AnalyticsDiagnosticsView()
+                        } label: {
+                            aboutRow("Usage Diagnostics", icon: "chart.bar.doc.horizontal", trailingIcon: "chevron.right")
+                        }
+                        .buttonStyle(RowPressStyle())
                     }
 
-                    NavigationLink {
-                        PrivacyDataView()
-                    } label: {
-                        aboutRow(
-                            "Privacy & Data",
-                            icon: "hand.raised",
-                            trailingIcon: "chevron.right"
-                        )
-                    }
-                    .buttonStyle(GlassPressStyle())
+                    GlassRowGroup(dividerInset: 14) {
+                        if let mail = SupportLinks.feedbackMailto {
+                            Link(destination: mail) {
+                                aboutRow("Send Feedback", icon: "envelope", trailingIcon: "arrow.up.right")
+                            }
+                            .buttonStyle(RowPressStyle())
+                        }
 
-                    if let mail = SupportLinks.feedbackMailto {
-                        Link(destination: mail) {
-                            aboutRow("Send Feedback", icon: "envelope", trailingIcon: "arrow.up.right")
+                        if let support = SupportLinks.support {
+                            Link(destination: support) {
+                                aboutRow("Support", icon: "lifepreserver", trailingIcon: "arrow.up.right")
+                            }
+                            .buttonStyle(RowPressStyle())
+                        }
+
+                        if let privacy = SupportLinks.privacyPolicy {
+                            Link(destination: privacy) {
+                                aboutRow("Privacy Policy", icon: "lock.shield", trailingIcon: "arrow.up.right")
+                            }
+                            .buttonStyle(RowPressStyle())
+                        }
+
+                        if let terms = SupportLinks.terms {
+                            Link(destination: terms) {
+                                aboutRow("Terms of Use", icon: "doc.text", trailingIcon: "arrow.up.right")
+                            }
+                            .buttonStyle(RowPressStyle())
                         }
                     }
-
-                    if let support = SupportLinks.support {
-                        Link(destination: support) {
-                            aboutRow("Support", icon: "lifepreserver", trailingIcon: "arrow.up.right")
-                        }
-                    }
-
-                    if let privacy = SupportLinks.privacyPolicy {
-                        Link(destination: privacy) {
-                            aboutRow("Privacy Policy", icon: "lock.shield", trailingIcon: "arrow.up.right")
-                        }
-                    }
-
-                    if let terms = SupportLinks.terms {
-                        Link(destination: terms) {
-                            aboutRow("Terms of Use", icon: "doc.text", trailingIcon: "arrow.up.right")
-                        }
-                    }
-
-                    NavigationLink {
-                        AnalyticsDiagnosticsView()
-                    } label: {
-                        aboutRow(
-                            "Usage Diagnostics",
-                            icon: "chart.bar.doc.horizontal",
-                            trailingIcon: "chevron.right"
-                        )
-                    }
-                    .buttonStyle(GlassPressStyle())
 
                     Text("Big Talk keeps your recordings, transcripts, and scores on this device. There is no account, and nothing is uploaded to us.")
                         .font(.caption)
@@ -463,6 +460,7 @@ struct AboutSettingsView: View {
                         .padding(.top, 4)
                 }
                 .padding()
+                .labelStyle(.row)
             }
             .scrollIndicators(.hidden)
         }
@@ -471,18 +469,18 @@ struct AboutSettingsView: View {
     }
 
     private func aboutRow(_ title: String, icon: String, trailingIcon: String) -> some View {
-        GlassCard(padding: 14) {
-            HStack {
-                Label(title, systemImage: icon)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                Spacer()
-                Image(systemName: trailingIcon)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(minHeight: 32)
+        HStack {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+            Spacer()
+            Image(systemName: trailingIcon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
+        .padding(14)
+        .frame(minHeight: 52)
+        .contentShape(Rectangle())
     }
 }
 

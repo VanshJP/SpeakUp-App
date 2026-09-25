@@ -5,6 +5,8 @@ import SwiftUI
 struct MetricExplainerSheet: View {
     let axis: SubscoreRadarChart.Axis
 
+    @Environment(\.dismiss) private var dismiss
+
     private var description: (measures: String, howCalculated: String) {
         SubscoreRadarChart.description(for: axis.id)
             ?? ("No description available for this metric.", "")
@@ -15,17 +17,33 @@ struct MetricExplainerSheet: View {
     }
 
     var body: some View {
-        PageScrollView(showsIndicators: false) {
-            VStack(spacing: 16) {
-                headerCard
-                measuresCard
-                if !description.howCalculated.isEmpty {
-                    calculationCard
+        // A bar for the system close button (ui-design-system 15b); the sheet
+        // could only be swiped away before, which VoiceOver cannot do.
+        NavigationStack {
+            ZStack {
+                AppBackground(style: .subtle)
+
+                PageScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        headerCard
+                        measuresCard
+                        if !description.howCalculated.isEmpty {
+                            calculationCard
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 32)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 32)
+            .navigationTitle("About this score")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -38,7 +56,7 @@ struct MetricExplainerSheet: View {
 
     private var headerCard: some View {
         let color = AppColors.scoreColor(for: axis.value)
-        return GlassCard(tint: AppColors.glassTintPrimary) {
+        return GlassCard(tint: AppColors.primary.opacity(0.06)) {
             VStack(spacing: 16) {
                 ZStack {
                     RingProgress(
@@ -69,10 +87,7 @@ struct MetricExplainerSheet: View {
     private var measuresCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("What this measures")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(0.3)
+                GlassCardTitle("What this measures")
                 Text(description.measures)
                     .font(.body)
                     .foregroundStyle(.white.opacity(0.92))
@@ -85,10 +100,7 @@ struct MetricExplainerSheet: View {
     private var calculationCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("How it's calculated")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(0.3)
+                GlassCardTitle("How it's calculated")
                 Text(description.howCalculated)
                     .font(.body)
                     .foregroundStyle(.white.opacity(0.92))

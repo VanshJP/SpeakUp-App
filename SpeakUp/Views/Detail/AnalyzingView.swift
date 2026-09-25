@@ -132,6 +132,9 @@ struct AnalyzingView: View {
                 HStack {
                     Button("Save & close", systemImage: "xmark") {
                         Haptics.light()
+                        // Keep whatever was answered, as Skip to results does.
+                        pendingAdvance?.cancel()
+                        saveAnswers()
                         onSaveAndClose()
                     }
                     .font(.subheadline.weight(.semibold))
@@ -172,6 +175,9 @@ struct AnalyzingView: View {
             ready && showsSelfCheck
         }
         .onDisappear {
+            // Leaving by Back, a tab switch or the recorder moving on keeps
+            // whatever was answered, as Skip and Save & close do.
+            saveAnswers()
             pendingAdvance?.cancel()
             pendingAdvance = nil
             pendingHandOver?.cancel()
@@ -213,7 +219,9 @@ struct AnalyzingView: View {
                     stepSegments
                 }
 
-                takeSavedLine
+                if isFreshTake {
+                    takeSavedLine
+                }
 
                 ZStack(alignment: .topLeading) {
                     if isWrappingUp {
@@ -236,6 +244,12 @@ struct AnalyzingView: View {
     }
 
     // MARK: Header
+
+    /// "Take saved" is news only right after the take. A check-in reopened on
+    /// an old take from History would announce a save from days ago.
+    private var isFreshTake: Bool {
+        waitsForScore || isStillProcessing || Date.now.timeIntervalSince(recording.date) < 15 * 60
+    }
 
     /// The acknowledgement, kept to one line so the question gets the page.
     private var takeSavedLine: some View {
@@ -402,10 +416,13 @@ struct AnalyzingView: View {
                     Capsule()
                         .fill(segmentColor(index: index, question: question))
                         .frame(height: 4)
-                        .frame(maxWidth: .infinity, minHeight: 24)
+                        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // A 44pt target that lays out at the old 24pt, so the page
+                // below does not move.
+                .padding(.vertical, -10)
                 .disabled(isWrappingUp)
                 .accessibilityLabel("Question \(index + 1) of \(feedbackQuestions.count)")
                 .accessibilityValue(isAnswered(question) ? "Answered" : "Not answered")
@@ -473,6 +490,13 @@ struct AnalyzingView: View {
 
     // MARK: - Bottom Dock
 
+    /// A scale question's Next is the page's white primary while it is up;
+    /// the dock's score button steps down to secondary beside it, so the
+    /// screen never shows two white capsules.
+    private var questionOwnsPrimary: Bool {
+        !isWrappingUp && currentQuestion?.type == .scale
+    }
+
     /// Scoring status and the one action share a floating panel, so the wait
     /// is always in view without competing with the question for the page.
     private var selfCheckBottomBar: some View {
@@ -484,7 +508,7 @@ struct AnalyzingView: View {
                     title: analysisReady ? "See your score" : "See results",
                     icon: "arrow.right",
                     iconPosition: .right,
-                    style: .primary,
+                    style: questionOwnsPrimary ? .secondary : .primary,
                     fullWidth: true
                 ) {
                     handOverNow()
@@ -505,6 +529,9 @@ struct AnalyzingView: View {
                 .disabled(hasHandedOver)
             }
         }
+        // The dock is a glass plate, so a secondary button inside it paints
+        // its capsule instead of laying glass on glass (rule 13b).
+        .environment(\.isOnGlass, true)
         .padding(16)
         .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
         .padding(.horizontal, 12)
@@ -864,9 +891,7 @@ private struct DetailSkeletonView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background {
-                Capsule().fill(.ultraThinMaterial)
-            }
+            .glassEffect(.regular, in: .capsule)
 
             if !takeShape.isEmpty {
                 TakeWaveform(levels: takeShape)

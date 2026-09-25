@@ -83,6 +83,16 @@ struct LessonBoardHeader: View {
     var isReviewing: Bool = false
     var isCompact: Bool = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// At accessibility sizes the glyph sits above the words. Beside them it
+    /// took a quarter of the width and broke "The PREP Framework" mid-word.
+    private var glyphAndText: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: isCompact ? 12 : 14))
+    }
+
     var body: some View {
         GlassCard(tint: identity.accent.opacity(0.10), padding: isCompact ? 12 : 18) {
             if isCompact {
@@ -96,23 +106,22 @@ struct LessonBoardHeader: View {
     // MARK: Compact
 
     private var compactBody: some View {
-        HStack(spacing: 12) {
+        glyphAndText {
             glyphPlate(size: 40, glyph: 22, cornerRadius: 12)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(lesson.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                     .minimumScaleFactor(0.85)
 
                 Text(lesson.objective)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             }
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -123,7 +132,7 @@ struct LessonBoardHeader: View {
 
     private var fullBody: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 14) {
+            glyphAndText {
                 glyphPlate(size: 60, glyph: 32, cornerRadius: 16)
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -142,11 +151,14 @@ struct LessonBoardHeader: View {
                 }
             }
 
+            // VoiceOver reads the plan itself. A "Lesson plan overview" label
+            // stood in for it, so the sentence was never spoken.
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "quote.opening")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(identity.accent.opacity(0.7))
                     .padding(.top, 2)
+                    .accessibilityHidden(true)
 
                 Text(LessonTeachingCopy.roadmap(for: lesson))
                     .font(.footnote)
@@ -154,7 +166,6 @@ struct LessonBoardHeader: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityLabel("Lesson plan overview")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -221,7 +232,8 @@ struct LessonProgressTrack: View {
 }
 
 /// Coach line above the current activity - cue only, no second title row.
-/// Kept to one quiet line: it frames the card under it, it is not a card.
+/// Kept to one quiet line: it frames the card under it, it is not a card. It
+/// had a tinted plate of its own, a card by another name in the role colour.
 struct LessonCoachCue: View {
     let activity: CurriculumActivity
 
@@ -237,12 +249,6 @@ struct LessonCoachCue: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(activity.type.teacherColor.opacity(0.08))
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(activity.type.teacherRole). \(activity.type.teacherCue)")

@@ -30,18 +30,21 @@ struct CoachFocusCard: View {
                     Spacer()
 
                     Text("\(plan.focusAverage)")
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(.statValue)
                         .foregroundStyle(AppColors.scoreColor(for: plan.focusAverage))
                     Text("/ \(plan.target)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
                         .foregroundStyle(.tertiary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(plan.focus.title): \(plan.focusAverage) of \(plan.target) target")
 
-                ProgressTrack(
-                    value: plan.focusAverage,
-                    target: plan.target,
-                    tint: AppColors.tint(for: plan.focus)
+                TickMeter(
+                    fraction: min(1, max(0, Double(plan.focusAverage) / Double(max(plan.target, 1)))),
+                    color: AppColors.tint(for: plan.focus)
                 )
+                .frame(height: 8)
 
                 // `focusNote`, not `headline`: the row above already draws
                 // the dimension, the score, the target and the arrow, and the
@@ -67,17 +70,15 @@ struct CoachFocusCard: View {
     // MARK: - Subviews
 
     private var header: some View {
-        HStack(spacing: 6) {
-            Text(showsCTA ? "Today's focus" : "Your focus")
-                .eyebrowStyle()
+        GlassCardTitle(showsCTA ? "Today's focus" : "Your focus") {
+            HStack(spacing: 6) {
+                Text("Last \(plan.sessionCount)")
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
 
-            Spacer()
-
-            Text("Last \(plan.sessionCount)")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.tertiary)
-
-            TrendChip(trend: plan.trend)
+                TrendChip(trend: plan.trend)
+            }
         }
     }
 
@@ -94,8 +95,10 @@ struct CoachFocusCard: View {
                 onPracticeAgain()
             }
         } else if let onPractice, let display = plan.focus.practiceRoute.display {
+            // The same words as Today's prep suggestion ("Start with Warm-Up"),
+            // so the focus card and the banner name one tool one way.
             GlassButton(
-                title: display.title,
+                title: "Start with \(display.title)",
                 icon: display.icon,
                 style: .secondary,
                 fullWidth: true
@@ -120,15 +123,16 @@ struct CoachFocusCard: View {
 // MARK: - Practice route display
 
 extension CoachPracticeRoute {
-    /// Title and icon for the tool. `nil` only for a drill raw value that no
-    /// longer resolves, which is a data problem rather than something to put a
-    /// button on.
+    /// Name and icon for the tool, from the tool catalog - this used to say
+    /// "Vocal Warm-Up" for the tool every other surface calls "Warm-Up".
+    /// `nil` only for a drill raw value that no longer resolves, which is a
+    /// data problem rather than something to put a button on.
     var display: (title: String, icon: String)? {
         switch self {
         case .readAloud:
-            return ("Read Aloud", "text.book.closed")
+            return (PracticeToolKind.readAloud.shortTitle, PracticeToolKind.readAloud.icon)
         case .warmUp:
-            return ("Vocal Warm-Up", "wind")
+            return (PracticeToolKind.warmUp.shortTitle, PracticeToolKind.warmUp.icon)
         case .drill(let raw):
             guard let mode = DrillMode(rawValue: raw) else { return nil }
             return (mode.title, mode.icon)
@@ -191,26 +195,6 @@ struct TrendChip: View {
         case .slipping: return AppColors.warning
         case .new, .flat: return AppColors.categoryNeutralCool
         }
-    }
-}
-
-struct ProgressTrack: View {
-    let value: Int
-    let target: Int
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { geometry in
-            let fraction = min(1, max(0, Double(value) / Double(max(target, 1))))
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.08))
-                Capsule()
-                    .fill(tint)
-                    .frame(width: geometry.size.width * fraction)
-            }
-        }
-        .frame(height: 5)
-        .accessibilityHidden(true)
     }
 }
 

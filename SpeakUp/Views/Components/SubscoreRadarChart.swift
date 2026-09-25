@@ -252,18 +252,49 @@ struct SubscoreRadarChart: View {
                 .fill(Color.white.opacity(0.001))
                 .contentShape(wedge)
                 .onTapGesture { selectAxis(axis) }
+                // The axis labels are the accessible buttons; a wedge is only
+                // a bigger target for the same tap.
+                .accessibilityHidden(true)
         }
     }
 
+    /// Each label is a real button when the chart is interactive: VoiceOver
+    /// reads "Clarity, 88, strongest" and can open the explainer, where it
+    /// used to hear "88" and "Clarity" as two inert fragments.
     @ViewBuilder
     private func axisLabels(center: CGPoint, radius: CGFloat) -> some View {
         ForEach(Array(axes.enumerated()), id: \.element.id) { index, axis in
             let anchorPoint = vertex(at: index, center: center, radius: radius + 21, scaled: 1.0)
-            axisLabel(axis: axis)
-                .contentShape(Rectangle())
-                .onTapGesture { if interactive { selectAxis(axis) } }
-                .position(x: anchorPoint.x, y: anchorPoint.y)
+            Group {
+                if interactive {
+                    Button {
+                        selectAxis(axis)
+                    } label: {
+                        axisLabel(axis: axis)
+                            .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(GlassPressStyle())
+                    .accessibilityLabel(axisAccessibilityLabel(axis))
+                    .accessibilityHint("Explains how this is scored")
+                } else {
+                    axisLabel(axis: axis)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(axisAccessibilityLabel(axis))
+                }
+            }
+            .position(x: anchorPoint.x, y: anchorPoint.y)
         }
+    }
+
+    private func axisAccessibilityLabel(_ axis: Axis) -> String {
+        var label = "\(axis.label), \(axis.value)"
+        if axis.id == emphasizedAxisIDs.strongest {
+            label += ", strongest"
+        } else if axis.id == emphasizedAxisIDs.weakest {
+            label += ", weakest"
+        }
+        return label
     }
 
     @ViewBuilder
@@ -278,22 +309,27 @@ struct SubscoreRadarChart: View {
             return .white
         }()
 
+        // Text styles, so the labels follow Dynamic Type - capped, because
+        // they sit on fixed radii around the dial and would collide past it.
         VStack(spacing: 1) {
             Text("\(axis.value)")
-                .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.caption.weight(.bold).monospacedDigit())
+                .fontDesign(.rounded)
                 .foregroundStyle(valueTint)
             HStack(spacing: 2) {
                 if isStrongest {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 8, weight: .black))
+                        .font(.caption2.weight(.black))
+                        .imageScale(.small)
                         .foregroundStyle(AppColors.success)
                 } else if isWeakest {
                     Image(systemName: "arrow.down")
-                        .font(.system(size: 8, weight: .black))
+                        .font(.caption2.weight(.black))
+                        .imageScale(.small)
                         .foregroundStyle(AppColors.warning)
                 }
                 Text(axis.label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.75))
                     .tracking(0.3)
                     .lineLimit(1)
@@ -301,6 +337,13 @@ struct SubscoreRadarChart: View {
         }
         .opacity(hasEmphasis && !isStrongest && !isWeakest ? 0.55 : 1)
         .fixedSize()
+        // Share-card renders (non-interactive) stay at the default size so the
+        // exported image does not change with the sender's text setting.
+        .dynamicTypeSize(
+            interactive
+                ? DynamicTypeSize.xSmall...DynamicTypeSize.xxLarge
+                : DynamicTypeSize.large...DynamicTypeSize.large
+        )
     }
 
     /// Counts up with the wedges - `CountUpText` is `Animatable`, so it

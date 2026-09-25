@@ -8,30 +8,31 @@ struct TranscriptExcerptCard: View {
 
     var body: some View {
         if let window = densestFillerWindow {
-            GlassCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    header(fillerCount: window.fillerCount)
-
-                    HighlightedTranscriptView(
-                        words: window.words,
-                        showFillerHighlights: true,
-                        showVocabHighlights: false
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-
-                    Text("See full transcript")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(AppColors.primary)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
+            // A real button, so the card presses like every other one (a tap
+            // gesture gave no sign it had landed).
+            Button {
                 Haptics.light()
                 onOpenTranscript()
+            } label: {
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        header(fillerCount: window.fillerCount)
+
+                        HighlightedTranscriptView(
+                            words: window.words,
+                            showFillerHighlights: true,
+                            showVocabHighlights: false
+                        )
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                        Text("See full transcript")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
             }
-            .accessibilityElement(children: .combine)
+            .buttonStyle(GlassPressStyle())
             .accessibilityHint("Opens the full transcript")
-            .accessibilityAddTraits(.isButton)
         }
     }
 

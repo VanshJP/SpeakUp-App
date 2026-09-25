@@ -2,10 +2,13 @@ import Foundation
 import os.log
 import SwiftUI
 import SwiftData
-import UIKit
 
 @Observable
 class PromptWheelViewModel {
+    /// The rim's order, alphabetical. The Library's Spin card draws its
+    /// teaser in this order too, so the card previews the wheel it opens.
+    static let categoryOrder: [PromptCategory] = PromptCategory.allCases.sorted { $0.rawValue < $1.rawValue }
+
     private let logger = Logger.app("PromptWheel")
     var categories: [String] = []
     var prompts: [Prompt] = []
@@ -42,7 +45,8 @@ class PromptWheelViewModel {
             let promptDescriptor = FetchDescriptor<Prompt>()
             let allPrompts = try context.fetch(promptDescriptor)
             prompts = allPrompts.filter { enabledCategoryNames.contains($0.category) }
-            categories = Array(Set(prompts.map { $0.category })).sorted()
+            let stocked = Set(prompts.map(\.category))
+            categories = Self.categoryOrder.map(\.rawValue).filter(stocked.contains)
         } catch {
             logger.error("Error loading prompts: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
@@ -109,9 +113,9 @@ class PromptWheelViewModel {
             guard let self else { return }
             self.isSpinning = false
             self.selectCategory(at: landing.index)
-
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
+            // The landing's one haptic. The view used to add an impact on
+            // the same frame (it fired on every `isSpinning` flip).
+            Haptics.success()
         }
     }
 

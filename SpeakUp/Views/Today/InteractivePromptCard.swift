@@ -21,11 +21,21 @@ struct InteractivePromptCard: View {
         GlassCard(padding: 14, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .center, spacing: 8) {
+                    // Category · difficulty, the grammar of a Library prompt
+                    // row. Difficulty used to be a filled red "Hard" capsule
+                    // beside the length pill and the reroll - three chip
+                    // styles in one row, and error red on something that is
+                    // not an error.
                     HStack(spacing: 5) {
                         Image(systemName: categoryIcon)
-                        Text(prompt?.category ?? "Loading...")
+                        Text(categoryName)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
+                        if let difficulty = prompt?.difficulty {
+                            Text("·")
+                            Text(difficulty.displayName)
+                                .foregroundStyle(difficulty.color)
+                        }
                     }
                     .eyebrowStyle(categoryColor)
                     .layoutPriority(-1)
@@ -33,10 +43,6 @@ struct InteractivePromptCard: View {
                     Spacer(minLength: 8)
 
                     HStack(spacing: 8) {
-                        if let difficulty = prompt?.difficulty {
-                            StatusPill.difficulty(difficulty)
-                        }
-
                         DurationPill(selectedDuration: $selectedDuration)
 
                         SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
@@ -69,6 +75,11 @@ struct InteractivePromptCard: View {
             }
             .accessibilityElement(children: .contain)
         }
+    }
+
+    private var categoryName: String {
+        guard let category = prompt?.category else { return "Loading..." }
+        return PromptCategory(rawValue: category)?.shortName ?? category
     }
 
     private var categoryColor: Color {

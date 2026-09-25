@@ -76,16 +76,37 @@ struct NextStep {
     }
 
     private static func route(for dimension: CoachDimension) -> (title: String, action: Action) {
-        switch dimension.practiceRoute {
+        let route = dimension.practiceRoute
+        switch route {
         case .readAloud:
-            return ("Read Aloud", .readAloud)
+            return (route.actionTitle ?? "Practice again", .readAloud)
         case .warmUp:
-            return ("Vocal Warm-Up", .warmUp)
+            return (route.actionTitle ?? "Practice again", .warmUp)
         case .drill(let raw):
-            guard let mode = DrillMode(rawValue: raw) else {
+            guard let mode = DrillMode(rawValue: raw), let title = route.actionTitle else {
                 return ("Practice again", .practiceAgain)
             }
-            return ("\(mode.title) · \(mode.currentDurationSeconds)s", .drill(mode))
+            return ("\(title) · \(mode.currentDurationSeconds)s", .drill(mode))
+        }
+    }
+}
+
+// MARK: - Route titles
+
+extension CoachPracticeRoute {
+    /// Verb-first CTA naming the tool the way the Library does
+    /// (`PracticeToolKind`, drill names from `DrillMode`). Shared by the next
+    /// step and the coaching tip rows, which used to print "Read Aloud" and
+    /// "Vocal Warm-Up" as bare Title Case nouns on a button.
+    var actionTitle: String? {
+        switch self {
+        case .readAloud:
+            return "Open \(PracticeToolKind.readAloud.title)"
+        case .warmUp:
+            return "Open \(PracticeToolKind.warmUp.title)"
+        case .drill(let raw):
+            guard let mode = DrillMode(rawValue: raw) else { return nil }
+            return "Start \(mode.title)"
         }
     }
 }
@@ -111,7 +132,7 @@ struct NextStepCard: View {
                             .foregroundStyle(.white)
 
                         Text("\(step.score)")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.statValue)
                             .foregroundStyle(AppColors.scoreColor(for: step.score))
 
                         // Said out loud because the Coaching tab prints the
@@ -160,12 +181,15 @@ struct NextStepCard: View {
                             )
                             onPracticeAgain()
                         } label: {
+                            // Painted like `GlassButton.secondary` on a plate:
+                            // a material disc on a glass card read as a grey
+                            // smudge (glass on glass, rule 13b).
                             Image(systemName: "arrow.counterclockwise")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 46, height: 46)
-                                .background { Circle().fill(.ultraThinMaterial) }
-                                .overlay { Circle().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+                                .background { Circle().fill(Color.white.opacity(0.10)) }
+                                .overlay { Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
                         }
                         .buttonStyle(GlassPressStyle())
                         .accessibilityLabel("Practice this prompt again")

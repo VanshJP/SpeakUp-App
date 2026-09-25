@@ -8,39 +8,40 @@ struct WordWorkoutSettingsView: View {
             AppBackground(style: .subtle)
 
             PageScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: AppLayout.listSpacing) {
                     VocabChallengeSettingsCard(viewModel: viewModel)
 
-                    NavigationLink {
-                        WordBankView(viewModel: viewModel, showDismissButton: false)
-                    } label: {
-                        GlassCard(padding: 14) {
+                    GlassRowGroup {
+                        NavigationLink {
+                            WordBankView(viewModel: viewModel, showDismissButton: false, initialTab: .words)
+                                .restoresNavigationBar()
+                        } label: {
                             HStack(spacing: 14) {
-                                Image(systemName: "list.bullet.rectangle")
-                                    .font(.body)
-                                    .foregroundStyle(AppColors.categorySage)
-                                    .frame(width: 28)
+                                IconChip(icon: "list.bullet.rectangle", tint: AppColors.categorySage, size: 30)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Your word bank")
+                                    Text("Your words")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.primary)
-                                    Text("\(viewModel.vocabWords.count) word\(viewModel.vocabWords.count == 1 ? "" : "s") the workout draws from")
+                                    Text(wordCountText)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
 
-                                Spacer()
+                                Spacer(minLength: 8)
 
                                 Image(systemName: "chevron.right")
-                                    .font(.caption2)
+                                    .font(.caption.weight(.semibold))
                                     .foregroundStyle(.tertiary)
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                             .contentShape(Rectangle())
                         }
+                        .buttonStyle(RowPressStyle())
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding()
             }
@@ -48,5 +49,13 @@ struct WordWorkoutSettingsView: View {
         }
         .navigationTitle("Word Workout")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var wordCountText: String {
+        switch viewModel.vocabWords.count {
+        case 0: "Add words for the workout to draw from"
+        case 1: "1 word the workout draws from"
+        case let count: "\(count) words the workout draws from"
+        }
     }
 }

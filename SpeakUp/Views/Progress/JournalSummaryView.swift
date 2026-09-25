@@ -25,16 +25,23 @@ struct JournalSummaryView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 summaryStatCard(icon: "mic.fill", label: "Sessions", value: "\(totalSessions)", color: AppColors.primary)
                 summaryStatCard(icon: "clock.fill", label: "Minutes", value: "\(totalMinutes)", color: AppColors.info)
-                summaryStatCard(icon: "chart.bar.fill", label: "Avg Score", value: "\(averageScore)", color: AppColors.success)
-                summaryStatCard(icon: "arrow.up.right", label: "Improvement", value: "\(improvement >= 0 ? "+" : "")\(improvement)", color: improvement >= 0 ? AppColors.success : AppColors.error)
+                summaryStatCard(icon: "chart.bar.fill", label: "Avg score", value: "\(averageScore)", color: AppColors.success)
+                summaryStatCard(
+                    icon: improvement > 0 ? "arrow.up.right" : improvement < 0 ? "arrow.down.right" : "arrow.right",
+                    label: "Improvement",
+                    value: "\(improvement > 0 ? "+" : "")\(improvement)",
+                    // A drop is amber, never red; the arrow follows the sign.
+                    color: improvement > 0 ? AppColors.success : improvement < 0 ? AppColors.warning : .secondary
+                )
             }
 
             if unlockedAchievements > 0 {
                 HStack {
                     Image(systemName: "trophy.fill")
                         .foregroundStyle(AppColors.warning)
-                    Text("\(unlockedAchievements) achievements unlocked")
+                    Text(unlockedAchievements == 1 ? "1 achievement unlocked" : "\(unlockedAchievements) achievements unlocked")
                         .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
                     Spacer()
                 }
                 .padding(.top, 4)
@@ -46,6 +53,8 @@ struct JournalSummaryView: View {
         }
     }
 
+    /// A tile painted on the card, not glass or material: this sits inside a
+    /// FeaturedGlassCard, and a material fill there read as a grey slab.
     private func summaryStatCard(icon: String, label: String, value: String, color: Color) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
@@ -54,6 +63,8 @@ struct JournalSummaryView: View {
 
             Text(value)
                 .font(.title2.weight(.bold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
 
             Text(label)
                 .font(.caption)
@@ -62,16 +73,9 @@ struct JournalSummaryView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(color.opacity(0.1))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                }
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.06))
         }
+        .accessibilityElement(children: .combine)
     }
 }

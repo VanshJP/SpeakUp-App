@@ -29,7 +29,7 @@ struct TakeComparisonCard: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("\(previous)")
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .font(.statValue)
                         .foregroundStyle(.tertiary)
 
                     Image(systemName: "arrow.right")
@@ -37,7 +37,7 @@ struct TakeComparisonCard: View {
                         .foregroundStyle(.tertiary)
 
                     Text("\(current)")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.metricValue)
                         .foregroundStyle(AppColors.scoreColor(for: current))
 
                     Spacer()

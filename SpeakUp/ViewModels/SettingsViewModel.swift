@@ -2,6 +2,7 @@ import Foundation
 import os.log
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @MainActor @Observable
 class SettingsViewModel {
@@ -417,11 +418,15 @@ class SettingsViewModel {
             
             // Update notifications if needed
             if dailyReminderEnabled {
-                await scheduleReminderNotification()
+                // Turning reminders on is the one moment the system prompt is
+                // expected. Without it, a user who skipped the first-score
+                // sheet saw the toggle on while nothing was ever delivered.
+                await scheduleReminderNotification(requestingPermission: consentingToReminders)
                 // The scheduler owns the slot in adaptive mode and may have just
                 // moved it. Without this the Reminders screen would keep showing
                 // the time it loaded with, which is not the time that fires.
                 syncReminderTimeFromStore()
+                await refreshNotificationStatus()
             } else {
                 await cancelReminderNotification()
             }
@@ -439,19 +444,21 @@ class SettingsViewModel {
         await saveSettings()
     }
 
+    /// Returns false when the tap was refused: the last enabled category stays
+    /// on, so Today always has prompts to offer.
     @MainActor
-    func toggleCategory(_ category: PromptCategory) {
+    @discardableResult
+    func toggleCategory(_ category: PromptCategory) -> Bool {
         if enabledPromptCategories.contains(category) {
-            // Don't allow disabling all categories
-            if enabledPromptCategories.count > 1 {
-                enabledPromptCategories.remove(category)
-            }
+            guard enabledPromptCategories.count > 1 else { return false }
+            enabledPromptCategories.remove(category)
         } else {
             enabledPromptCategories.insert(category)
         }
         Task {
             await saveSettings()
         }
+        return true
     }
     
     func isCategoryEnabled(_ category: PromptCategory) -> Bool {
@@ -469,11 +476,11 @@ class SettingsViewModel {
             return
         }
         guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
-            showVocabError("Already in your word bank")
+            showVocabError("Already in your words")
             return
         }
         guard !isFillerWord(trimmed) else {
-            showVocabError("That's a filler word, we track those separately")
+            showVocabError("That's a filler word. Fillers have their own tab.")
             return
         }
         guard trimmed.count >= 2 else {
@@ -570,11 +577,11 @@ class SettingsViewModel {
             return
         }
         guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
-            showDictationError("Already in your dictation dictionary")
+            showDictationError("Already in your names and terms")
             return
         }
         guard !isFillerWord(trimmed) else {
-            showDictationError("That's a filler word, avoid biasing it")
+            showDictationError("That's a filler word. Fillers have their own tab.")
             return
         }
         dictationBiasWords.append(trimmed)
@@ -628,11 +635,11 @@ class SettingsViewModel {
             return
         }
         guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
-            showFillerError("This word is in your Word Bank")
+            showFillerError("This word is on your Words tab")
             return
         }
         guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
-            showFillerError("This word is in your Dictation Dictionary")
+            showFillerError("This word is in your names and terms")
             return
         }
         if isContextDependent {
@@ -721,9 +728,14 @@ class SettingsViewModel {
             || customContextFillerWords.contains(lowered)
     }
 
+    /// Preferences only. What the user made (word lists, custom fillers and
+    /// questions) and what the app learned from their takes (voice profile,
+    /// learned pace, milestone bookkeeping) survive: the old reset wiped them
+    /// under an alert that only said "settings". Clear All Data owns those.
     @MainActor
-    func resetSettings() async {
-        guard let settings, let context = modelContext else { return }
+    @discardableResult
+    func resetSettings() async -> Bool {
+        guard let settings, let context = modelContext else { return false }
 
         // Reset to defaults
         settings.defaultDuration = 60
@@ -738,7 +750,6 @@ class SettingsViewModel {
         settings.streakRemindersEnabled = true
         settings.comebackRemindersEnabled = true
         settings.milestoneNotificationsEnabled = true
-        settings.lastMilestoneNotified = 0
         // Banked freezes are earned practice, not a preference - a settings
         // reset must not confiscate them.
         settings.weeklyGoalSessions = 5
@@ -746,7 +757,6 @@ class SettingsViewModel {
         settings.trackFillerWords = true
         settings.targetWPM = 150
         settings.autoPaceTarget = true
-        settings.calibratedWPM = nil
         settings.hideAnsweredPrompts = true
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15
@@ -761,8 +771,6 @@ class SettingsViewModel {
         settings.soundPack = 0
         settings.shareCardTheme = 0
         ChirpPlayer.shared.pack = .soft
-        settings.vocabWords = []
-        settings.dictationBiasWords = []
         settings.vocabChallengeEnabled = true
         settings.vocabChallengeWordCount = 2
         settings.vocabChallengeLevelOverride = 0
@@ -770,18 +778,8 @@ class SettingsViewModel {
         settings.vocabChallengeUseDictionary = true
         settings.vocabChallengeIntroduceNew = true
         settings.vocabChallengeSpacedReview = true
-        settings.customFillerWords = []
-        settings.customContextFillerWords = []
-        settings.removedDefaultFillers = []
         settings.chirpSoundEnabled = true
         settings.sessionFeedbackEnabled = true
-        settings.customFeedbackQuestions = []
-
-        // Voice Profile
-        settings.voiceProfileF0Hz = nil
-        settings.voiceProfileEnergyDb = nil
-        settings.voiceProfileSampleCount = 0
-        settings.voiceProfileLastUpdated = nil
 
         // Score Weights
         let defaults = ScoreWeights.defaults
@@ -798,14 +796,24 @@ class SettingsViewModel {
         do {
             try context.save()
             syncLocalState()
+            // Reminders are now off, and off means nothing ships - including
+            // the ladder queued before the reset, which used to keep firing
+            // until the next foreground rebuilt it.
+            await cancelReminderNotification()
+            return true
         } catch {
             logger.error("Error resetting settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
+            return false
         }
     }
 
+    /// Everything the user made or the app learned from their voice, here and
+    /// on every device iCloud sync reaches. Preferences stay - that is Reset
+    /// settings. The dialog in `DataManagementView` lists exactly this scope.
     @MainActor
-    func clearAllData() async {
-        guard let context = modelContext else { return }
+    @discardableResult
+    func clearAllData() async -> Bool {
+        guard let context = modelContext else { return false }
 
         do {
             // Delete all recordings and their files (local + iCloud)
@@ -827,49 +835,61 @@ class SettingsViewModel {
                 }
             }
 
-            // Delete all goals
-            let goalDescriptor = FetchDescriptor<UserGoal>()
-            let goals = try context.fetch(goalDescriptor)
-            for goal in goals {
-                context.delete(goal)
-            }
+            try deleteAll(UserGoal.self, in: context)
+            try deleteAll(Achievement.self, in: context)
+            try deleteAll(CurriculumProgress.self, in: context)
+            // "All data" used to leave the user's own writing behind.
+            try deleteAll(Story.self, in: context)
+            try deleteAll(StoryFolder.self, in: context)
+            try deleteAll(RecordingGroup.self, in: context)
+            try deleteAll(Prompt.self, matching: #Predicate<Prompt> { $0.isUserCreated }, in: context)
 
-            // Delete all achievements
-            let achievementDescriptor = FetchDescriptor<Achievement>()
-            let achievements = try context.fetch(achievementDescriptor)
-            for achievement in achievements {
-                context.delete(achievement)
-            }
-
-            // Delete curriculum progress
-            let curriculumDescriptor = FetchDescriptor<CurriculumProgress>()
-            let curriculumItems = try context.fetch(curriculumDescriptor)
-            for item in curriculumItems {
-                context.delete(item)
-            }
-
-            // Clear word bank and filler customizations from settings
             if let settings {
                 settings.vocabWords = []
                 settings.dictationBiasWords = []
                 settings.customFillerWords = []
                 settings.customContextFillerWords = []
                 settings.removedDefaultFillers = []
+                settings.customFeedbackQuestions = []
+                settings.savedReadAloudTexts = []
+                // Measured from takes that no longer exist.
+                settings.voiceProfileF0Hz = nil
+                settings.voiceProfileEnergyDb = nil
+                settings.voiceProfileSampleCount = 0
+                settings.voiceProfileLastUpdated = nil
+                settings.calibratedWPM = nil
+                settings.lastMilestoneNotified = 0
             }
-            vocabWords = []
-            dictationBiasWords = []
-            customFillerWords = []
-            customContextFillerWords = []
-            removedDefaultFillers = []
 
             try context.save()
+            syncLocalState()
+
+            // The shipped story folders come back empty, as on a first launch.
+            StoryFolderSeedService.invalidateFingerprint()
+            try StoryFolderSeedService.healIfNeeded(in: context)
 
             // The FAQ calls this a full data reset, so it has to include the
             // usage log. It lives in a file rather than the store, so deleting
             // rows never touched it.
             AnalyticsService.shared.reset()
+
+            // Queued nudges quote a streak that was just deleted. The refresh
+            // rebuilds them from the empty store, or cancels them when off.
+            await scheduleReminderNotification()
+            return true
         } catch {
             logger.error("Error clearing data: \(error.localizedDescription, privacy: .private(mask: .hash))")
+            return false
+        }
+    }
+
+    private func deleteAll<Item: PersistentModel>(
+        _ type: Item.Type,
+        matching predicate: Predicate<Item>? = nil,
+        in context: ModelContext
+    ) throws {
+        for item in try context.fetch(FetchDescriptor<Item>(predicate: predicate)) {
+            context.delete(item)
         }
     }
 
@@ -893,6 +913,17 @@ class SettingsViewModel {
 
     var voiceProfileSampleCount: Int {
         settings?.voiceProfileSampleCount ?? 0
+    }
+
+    /// One word for the Analysis row and the Voice Profile pill. The count is
+    /// a trust weight, not a number of takes - a manual calibration sets it to
+    /// 3 - so it is never shown as "trained on N recordings".
+    var voiceProfileStatus: String {
+        switch voiceProfileSampleCount {
+        case 0: "Not calibrated"
+        case 1..<3: "Learning"
+        default: "Ready"
+        }
     }
 
     var voiceProfileLastUpdated: Date? {
@@ -926,9 +957,37 @@ class SettingsViewModel {
     /// Settings already persisted the hour/minute by the time this runs, so the
     /// scheduler reads them back rather than taking them as arguments - one
     /// source of truth for the whole ladder.
-    private func scheduleReminderNotification() async {
+    private func scheduleReminderNotification(requestingPermission: Bool = false) async {
         guard let modelContext else { return }
-        await RetentionScheduler.refresh(context: modelContext, service: notificationService)
+        await RetentionScheduler.refresh(
+            context: modelContext,
+            service: notificationService,
+            requestPermissionIfNeeded: requestingPermission
+        )
+    }
+
+    /// What iOS will actually deliver. Reminders can be on here and still never
+    /// arrive, so the Reminders screen reads this, not the toggle. Starts as
+    /// authorized so the warning cannot flash before the first check.
+    private(set) var notificationStatus: UNAuthorizationStatus = .authorized
+
+    var notificationsBlocked: Bool {
+        dailyReminderEnabled && ![.authorized, .provisional, .ephemeral].contains(notificationStatus)
+    }
+
+    func refreshNotificationStatus() async {
+        notificationStatus = await notificationService.authorizationStatus()
+    }
+
+    /// The Allow button on the Reminders screen, for the case iOS never asked
+    /// (reminders switched on by sync from another device). Reschedules the
+    /// ladder when the answer is yes.
+    func requestNotificationPermission() async {
+        _ = await notificationService.requestPermission()
+        await refreshNotificationStatus()
+        if !notificationsBlocked {
+            await scheduleReminderNotification()
+        }
     }
 
     /// Pull the stored reminder hour back into the picker's value. Guarded on

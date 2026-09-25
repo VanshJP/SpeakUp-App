@@ -10,7 +10,7 @@ Rare, optional coach notes when practice history earns one — welcome-back afte
 |------|------|
 | Signals / budget engine | `SpeakUp/Models/CoachMoment.swift` |
 | Presentation + SwiftData I/O | `SpeakUp/Services/CoachMomentService.swift` |
-| Inline card + overlay | `SpeakUp/Views/CoachMoment/CoachMomentCard.swift` — CTAs are `GlassButton.primary` |
+| Inline card + overlay | `SpeakUp/Views/CoachMoment/CoachMomentCard.swift` — the Today card's CTA is `GlassButton.secondary` (Start speaking is Today's only white primary); the detail card, which replaces `NextStepCard` as that screen's one action, and the overlay (a `GlassCard` plate whose content fades in while the glass only scales) keep `.primary` |
 | Persistence | `UserSettings.coachMomentWeekKey` / `coachMomentCelebrationsUsedThisWeek` / `coachMomentDeliveredIDs` / `coachMomentClearedDimensionsRaw` |
 | Today eval | `TodayViewModel.loadData` → `CoachMomentService.evaluateToday` |
 | Today card | `TodayView` (FriendChallenge-style, above modules) |
@@ -46,7 +46,7 @@ Care notes never spend the weekly celebration budget. Celebrations cap at **1 pe
 4. First-axis wins persist `CoachDimension.rawValue` on accept **or dismiss** so the toast is once per dimension.
 5. One pending note **per surface** (`pendingToday` / `pendingDetail` / `pendingOverlay`). Today eval must not clobber a detail soft-landing. Achievements overlay outranks coach-note overlay.
 6. Today evaluates care before celebrations. A welcome-back note beats anniversary confetti when both apply.
-7. No new Today home module — transient card like `FriendChallengeCard`, not a customizable block.
+7. No new Today home module — transient card like `FriendChallengeCard`, not a customizable block. A Today note's `.practiceAgain` starts through `TodayView.startTodaysTake()`, so on a story day it records the story.
 8. Soft-landing and first-axis-clear notes replace `NextStepCard`; two adjacent actions are never shown.
 9. A pending overlay is never silently replaced by a concurrent Today/detail reload. Leaving a fresh detail **abandons** its pending note: clear presentation state, spend no budget, mark no skill as seen.
 10. Streaks do not produce coach-note overlays. Achievements own milestones; Today owns the quiet arrival haptic. One event gets one celebration.

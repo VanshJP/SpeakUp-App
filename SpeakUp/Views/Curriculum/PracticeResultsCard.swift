@@ -6,7 +6,9 @@ struct PracticeResultsCard: View {
     let activity: CurriculumActivity
 
     @Query private var userSettings: [UserSettings]
-    @State private var appeared = false
+    /// Drives the ring's sweep and the number's count together. No odometer
+    /// ticks: the take's own reveal played them a moment ago.
+    @State private var counted = false
     /// Resolved once - `recording.analysis` re-decodes the Codable blob on
     /// every access, and `primaryTip` / encouragement both read it from body.
     @State private var analysis: SpeechAnalysis?
@@ -15,17 +17,15 @@ struct PracticeResultsCard: View {
     private var targetWPM: Int { userSettings.first.resolvedTargetWPM }
 
     var body: some View {
-        GlassCard(tint: AppColors.glassTintPrimary) {
+        GlassCard(tint: AppColors.primary.opacity(0.06)) {
             VStack(spacing: 16) {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
                         .foregroundStyle(AppColors.success)
-                        .scaleEffect(appeared ? 1.0 : 0.5)
-                        .opacity(appeared ? 1.0 : 0)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Practice Complete")
+                        Text("Practice complete")
                             .font(.headline)
 
                         Text(practiceEncouragement)
@@ -34,11 +34,17 @@ struct PracticeResultsCard: View {
                     }
 
                     Spacer()
+
+                    // The card opens the take's full page.
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
 
                 if let analysis {
                     resultsContent(analysis)
-                        .opacity(appeared ? 1.0 : 0)
+                        .introReveal(delay: .milliseconds(150))
                 } else {
                     analyzingPlaceholder
                 }
@@ -46,9 +52,7 @@ struct PracticeResultsCard: View {
         }
         .onAppear {
             resolveAnalysisIfNeeded()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                appeared = true
-            }
+            counted = true
         }
         .onChange(of: recording.overallScore) { _, _ in
             analysis = nil
@@ -83,7 +87,7 @@ struct PracticeResultsCard: View {
                 scoreRing(score: analysis.speechScore.overall)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Overall Score")
+                    Text("Overall score")
                         .font(.subheadline.weight(.medium))
 
                     if let tip = primaryTip {
@@ -135,7 +139,7 @@ struct PracticeResultsCard: View {
             metricPill(
                 icon: "speedometer",
                 label: "Pace",
-                value: "\(wpm)",
+                value: "\(wpm) wpm",
                 color: onPace ? AppColors.success : AppColors.warning
             )
 
@@ -152,20 +156,26 @@ struct PracticeResultsCard: View {
 
     // MARK: - Subviews
 
+    /// Ring and number ride one animation, the way every animated score does:
+    /// a static number beside a sweeping ring read as two clocks.
     private func scoreRing(score: Int) -> some View {
         ZStack {
             RingProgress(
-                progress: appeared ? Double(score) / 100.0 : 0,
+                progress: counted ? Double(score) / 100.0 : 0,
                 color: AppColors.scoreColor(for: score),
                 lineWidth: 5
             )
-            .motion(AppMotion.reveal.delay(0.2), value: appeared)
 
-            Text("\(score)")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(AppColors.scoreColor(for: score))
+            CountUpText(
+                value: counted ? Double(score) : 0,
+                font: .system(size: 20, weight: .bold, design: .rounded),
+                color: AppColors.scoreColor(for: score)
+            )
         }
         .frame(width: 56, height: 56)
+        .motion(AppMotion.reveal.delay(0.2), value: counted)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Score \(score)")
     }
 
     private func metricPill(icon: String, label: String, value: String, color: Color) -> some View {

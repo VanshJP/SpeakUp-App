@@ -4,16 +4,21 @@ import SwiftData
 struct BatchAddPromptsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query private var existingPrompts: [Prompt]
 
     @State private var inputText = ""
     @State private var selectedCategory: PromptCategory = .personalGrowth
     @State private var selectedDifficulty: PromptDifficulty = .medium
+    @FocusState private var isTextFocused: Bool
 
-    private var promptLines: [String] {
-        inputText
+    /// One prompt per non-empty line, less any line the library already has
+    /// or the paste repeats - the rule a CSV import applies.
+    private var pastedPrompts: (unique: [String], duplicates: Int) {
+        let lines = inputText
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+        return PromptCSVService.removingDuplicates(lines, text: { $0 }, existing: existingPrompts.map(\.text))
     }
 
     var body: some View {
@@ -26,7 +31,6 @@ struct BatchAddPromptsView: View {
                         textInputSection
                         categorySection
                         difficultySection
-                        addButton
                     }
                     .padding()
                 }
@@ -38,17 +42,24 @@ struct BatchAddPromptsView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
+                // In the bar, not at the foot of the form under the keyboard.
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { savePrompts() }
+                        .disabled(pastedPrompts.unique.isEmpty)
+                }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
+        .onAppear { isTextFocused = true }
     }
 
     // MARK: - Text Input
 
     private var textInputSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Prompts", systemImage: "text.bubble")
-                .font(.headline)
+        let pasted = pastedPrompts
+
+        return VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("Prompts")
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 10) {
@@ -56,6 +67,7 @@ struct BatchAddPromptsView: View {
                         .frame(minHeight: 160)
                         .scrollContentBackground(.hidden)
                         .font(.body)
+                        .focused($isTextFocused)
 
                     Divider()
 
@@ -69,55 +81,41 @@ struct BatchAddPromptsView: View {
 
                         Spacer()
 
-                        Text("\(promptLines.count) prompt\(promptLines.count == 1 ? "" : "s") detected")
+                        Text(countLabel(pasted))
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(promptLines.isEmpty ? Color.secondary : AppColors.primary)
+                            .monospacedDigit()
+                            .foregroundStyle(pasted.unique.isEmpty ? Color.secondary : AppColors.primary)
                     }
                 }
             }
         }
     }
 
+    private func countLabel(_ pasted: (unique: [String], duplicates: Int)) -> String {
+        let count = pasted.unique.count
+        guard pasted.duplicates > 0 else {
+            return "\(count) prompt\(count == 1 ? "" : "s") detected"
+        }
+        return "\(count) new · \(pasted.duplicates) duplicate\(pasted.duplicates == 1 ? "" : "s")"
+    }
+
     // MARK: - Category
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Category", systemImage: "folder")
-                .font(.headline)
+            GlassSectionHeader("Category")
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            FlowLayout(spacing: 8) {
                 ForEach(PromptCategory.allCases, id: \.self) { category in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            Haptics.selection()
-                            selectedCategory = category
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: category.iconName)
-                                .font(.system(size: 13))
-                                .foregroundStyle(selectedCategory == category ? .white : category.color)
-
-                            Text(category.displayName)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(selectedCategory == category ? .white : .secondary)
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 8)
-                        .background {
-                            if selectedCategory == category {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(category.color.opacity(0.7))
-                            } else {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    FilterChip(
+                        title: category.shortName,
+                        icon: category.iconName,
+                        isSelected: selectedCategory == category,
+                        tint: category.color
+                    ) {
+                        Haptics.selection()
+                        selectedCategory = category
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -132,60 +130,28 @@ struct BatchAddPromptsView: View {
 
     private var difficultySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Difficulty", systemImage: "speedometer")
-                .font(.headline)
+            GlassSectionHeader("Difficulty")
 
-            GlassCard {
-                HStack(spacing: 12) {
-                    ForEach(PromptDifficulty.allCases, id: \.self) { difficulty in
-                        Button {
-                            Haptics.selection()
-                            selectedDifficulty = difficulty
-                        } label: {
-                            Text(difficulty.displayName)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(selectedDifficulty == difficulty ? .white : .secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background {
-                                    if selectedDifficulty == difficulty {
-                                        Capsule()
-                                            .fill(difficulty.color.opacity(0.7))
-                                    } else {
-                                        Capsule()
-                                            .fill(.ultraThinMaterial)
-                                    }
-                                }
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+            HStack(spacing: 8) {
+                ForEach(PromptDifficulty.allCases, id: \.self) { difficulty in
+                    FilterChip(
+                        title: difficulty.displayName,
+                        icon: difficulty.iconName,
+                        isSelected: selectedDifficulty == difficulty,
+                        tint: difficulty.color
+                    ) {
+                        Haptics.selection()
+                        selectedDifficulty = difficulty
                     }
                 }
             }
         }
     }
 
-    // MARK: - Add Button
-
-    private var addButton: some View {
-        GlassButton(
-            title: "Add \(promptLines.count) Prompt\(promptLines.count == 1 ? "" : "s")",
-            icon: "plus.circle.fill",
-            style: .primary,
-            size: .large,
-            fullWidth: true
-        ) {
-            savePrompts()
-        }
-        .disabled(promptLines.isEmpty)
-        .opacity(promptLines.isEmpty ? 0.5 : 1)
-        .padding(.top, 8)
-    }
-
     // MARK: - Save
 
     private func savePrompts() {
-        for line in promptLines {
+        for line in pastedPrompts.unique {
             let prompt = Prompt(
                 id: "user-\(UUID().uuidString)",
                 text: line,

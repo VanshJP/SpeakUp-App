@@ -55,6 +55,34 @@ struct HighlightedTranscriptView: View {
                 )
             }
         }
+        // One element, read as prose. Every word used to be its own stop, so
+        // VoiceOver crawled a take a word at a time; the tappable openings
+        // stay reachable as actions on the passage.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(words.map(\.word).joined(separator: " "))
+        .accessibilityValue(fillerSummary)
+        .accessibilityActions {
+            if let onPlayWord {
+                ForEach(playableOpenings) { word in
+                    Button("Play repeated opening, \(word.word)") { onPlayWord(word) }
+                }
+            }
+        }
+    }
+
+    /// Same rule `WordView` uses for its button (recording-detail invariant 18).
+    private var playableOpenings: [TranscriptionWord] {
+        words.filter { structuralWordIDs.contains($0.id) && $0.start > 0 && $0.start.isFinite }
+    }
+
+    private var fillerSummary: String {
+        guard showFillerHighlights else { return "" }
+        let count = words.reduce(0) { $0 + ($1.isFiller ? 1 : 0) }
+        switch count {
+        case 0: return ""
+        case 1: return "1 filler word highlighted"
+        default: return "\(count) filler words highlighted"
+        }
     }
 }
 
@@ -79,6 +107,7 @@ struct SpeakerTurnTranscriptView: View {
                         Image(systemName: turn.isPrimarySpeaker ? "person.fill.checkmark" : "person.2.fill")
                             .font(.caption)
                             .foregroundStyle(turn.isPrimarySpeaker ? AppColors.primary : .secondary)
+                            .accessibilityHidden(true)
 
                         Text(turn.isPrimarySpeaker ? "You" : "Other speaker")
                             .font(.caption.weight(.semibold))
@@ -135,7 +164,7 @@ struct WordView: View {
             Button(action: onPlay) {
                 label
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
             .accessibilityLabel("Play repeated opening, \(word.word)")
         } else {
             label

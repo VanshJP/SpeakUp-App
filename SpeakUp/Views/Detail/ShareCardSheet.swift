@@ -18,6 +18,7 @@ struct ShareCardSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.glassAppearance) private var glassAppearance
     @Query private var userSettings: [UserSettings]
 
     @State private var includePrompt = true
@@ -61,82 +62,69 @@ struct ShareCardSheet: View {
     private var renderKey: String { "\(variant.rawValue)_\(theme.rawValue)" }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        // A navigation bar so the sheet closes the way every sheet does: the
+        // system close button, top leading (ui-design-system 15b). It used to
+        // draw its own 34pt ✕ beside a hand-set title.
+        NavigationStack {
+            ZStack {
+                AppBackground(style: .subtle)
 
-            preview
-                .frame(maxHeight: .infinity)
+                VStack(spacing: 0) {
+                    header
 
-            if !unavailable {
-                themeStrip.padding(.bottom, 14)
+                    preview
+                        .frame(maxHeight: .infinity)
+
+                    if !unavailable {
+                        themeStrip.padding(.bottom, 14)
+                    }
+
+                    if challengeAvailable && !unavailable {
+                        promptToggle.padding(.bottom, 18)
+                    }
+
+                    actionRow
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            if challengeAvailable && !unavailable {
-                promptToggle.padding(.bottom, 18)
+            .navigationTitle("Share")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .close) { dismiss() }
+                }
             }
-
-            actionRow
+            .overlay(alignment: .bottom) {
+                if let confirmation {
+                    Text(confirmation)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.bottom, 130)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(AppMotion.slide, value: confirmation)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         .presentationBackground { AppBackground(style: .subtle) }
         .task(id: renderKey) { await renderIfNeeded(variant) }
-        .overlay(alignment: .bottom) {
-            if let confirmation {
-                Text(confirmation)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background {
-                        Capsule().fill(.ultraThinMaterial)
-                        Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5)
-                    }
-                    .padding(.bottom, 130)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(AppMotion.slide, value: confirmation)
     }
 
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Text("Share")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-
-                HStack {
-                    Button {
-                        Haptics.light()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .frame(width: 34, height: 34)
-                            .background {
-                                Circle().fill(Color.white.opacity(0.06))
-                                Circle().stroke(AppColors.cardStroke, lineWidth: 0.5)
-                            }
-                    }
-                    .accessibilityLabel("Close")
-
-                    Spacer()
-                }
-            }
-
-            Text(subtitle)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.5))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
+        Text(subtitle)
+            .font(.footnote)
+            .foregroundStyle(.white.opacity(0.5))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
     }
 
     private var subtitle: String {
@@ -223,7 +211,7 @@ struct ShareCardSheet: View {
                                 .foregroundStyle(.white.opacity(option == theme ? 0.9 : 0.45))
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel(option.displayName)
                     .accessibilityAddTraits(option == theme ? [.isButton, .isSelected] : .isButton)
                 }
@@ -249,24 +237,21 @@ struct ShareCardSheet: View {
         .tint(AppColors.primary)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(AppColors.cardStroke, lineWidth: 0.5)
-        }
+        .glassEffect(
+            .regular.tint(glassAppearance.glassTint),
+            in: .rect(cornerRadius: 16, style: .continuous)
+        )
         .padding(.horizontal, 20)
         .onChange(of: includePrompt) { _, _ in Haptics.selection() }
     }
 
     // MARK: - Actions
 
+    /// Nothing to send without a card; the close button in the bar is the
+    /// only way out then, as it is for every sheet.
     @ViewBuilder
     private var actionRow: some View {
-        if unavailable {
-            GlassButton(title: "Done", style: .secondary) { dismiss() }
-                .padding(.bottom, 28)
-        } else {
+        if !unavailable {
             HStack(spacing: 4) {
                 ShareAction(icon: "square.and.arrow.down", label: "Save\nimage") {
                     withImage { image in Task { await saveToPhotos(image) } }
@@ -410,12 +395,16 @@ private struct ShareAction: View {
     var prominent: Bool = false
     let action: () -> Void
 
+    /// The dark glyph on the white disc - the same ink `GlassButton`'s primary
+    /// style uses. Local on purpose: AppColors has no ink token yet.
+    private static let ink = Color(red: 0.07, green: 0.07, blue: 0.08)
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(prominent ? Color(red: 0.07, green: 0.07, blue: 0.08) : .white)
+                    .foregroundStyle(prominent ? Self.ink : .white)
                     .frame(width: 58, height: 58)
                     .background {
                         Circle().fill(prominent ? Color.white.opacity(0.92) : Color.white.opacity(0.06))
@@ -431,7 +420,7 @@ private struct ShareAction: View {
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .accessibilityLabel(label.replacingOccurrences(of: "\n", with: " "))
     }
 }

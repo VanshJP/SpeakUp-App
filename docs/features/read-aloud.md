@@ -42,23 +42,29 @@ the pushed-page equivalent. Do not move it back into the column.
 The **Your passages** rail renders only when there is something saved, and ends
 with a compact "Add your own" card — a second door for people who already have
 passages. Tapping a card starts practice; its visible actions menu supports edit
-and confirmed deletion without requiring a hidden context menu.
+and confirmed deletion without requiring a hidden context menu. The menu floats
+over the card's trailing edge as a sibling of the card's button (never inside
+its label), and the card presses with `RowPressStyle` — a `GlassPressStyle`
+scale would slide the card out from under its own menu. `presentComposer` plays
+no haptic: the toolbar `+` (`ToolPage`) and the rail card each play their own.
 
 ### Passage composer
 
 `ReadAloudComposerSheet` owns the creation flow:
 
-1. **Paste** reads Clipboard text after an explicit tap.
-2. **Import File** accepts TXT, RTF, RTFD, and text-based PDF documents through `ReadAloudDocumentImporter`.
+1. **Paste** is the system `PasteButton`. Reading `UIPasteboard` from our own button raised iOS's "Allow Paste" alert on every tap; the system control never does, and greys itself out when there is no text. It must stay opaque to pass iOS's visibility check, so it wears a solid neutral tint rather than glass. Its payload can arrive off the main actor: the closure is `@Sendable` and hops to `@MainActor` before touching state.
+2. **Import file** accepts TXT, RTF, RTFD, and text-based PDF documents through `ReadAloudDocumentImporter`, and shows the `VoiceLoader` (`isLoading`) while it reads.
 3. **Type or edit** uses a dedicated editor with live word and character counts.
-4. **Hear It** uses `PronunciationService.speak(word:)`. Multi-word phrases speak as one utterance; more than three tokens use rate `0.32`, otherwise `0.35`.
-5. **Define** appears only when `PronunciationService.canDefine` is true. It opens `DictionaryView` and then `UIReferenceLibraryViewController`.
-6. **Save and Practice** keeps the text and starts the normal scored session after the composer dismisses.
-7. **Save for Later** stores the text without starting a session.
+4. **Hear it** uses `PronunciationService.speak(word:)`. Multi-word phrases speak as one utterance; more than three tokens use rate `0.32`, otherwise `0.35`. It reads **Stop** while playing, like the session's; it used to disable itself, and an 800-character passage could only be silenced by leaving the sheet.
+5. **Full definition** appears only when `PronunciationService.canDefine` is true. It opens `DictionaryView` and then `UIReferenceLibraryViewController`. It is the one name for the define action everywhere (composer, word sheet, Words).
+6. **Save and practice** keeps the text and starts the normal scored session after the composer dismisses.
+7. **Save for later** (**Save changes** when editing) stores the text without starting a session.
+
+Both save actions ride a `.safeAreaBar(edge: .bottom)`, so they sit above the keyboard the editor opens with. A dirty draft (text differs from what the sheet opened with) cannot be swiped away (`interactiveDismissDisabled`), and **Cancel** asks before discarding it.
 
 Replacing non-empty editor text through Paste or Import requires confirmation. Empty, under-minimum, whitespace-only, and over-limit drafts cannot be saved, heard, or practiced.
 
-The scoring engine is designed for one focused section. If imported text exceeds `customMaxCharacters` (800), the importer selects an opening at the nearest sentence, paragraph, or word boundary and tells the user. Pasted or typed over-limit text offers the same one-tap **Use First Practice Section** recovery. Scanned PDFs fail with a clear OCR-specific message instead of appearing to import empty content.
+The scoring engine is designed for one focused section. If imported text exceeds `customMaxCharacters` (800), the importer selects an opening at the nearest sentence, paragraph, or word boundary and tells the user. Pasted or typed over-limit text offers the same one-tap **Use first practice section** recovery, a small secondary `GlassButton` (it was caption text with a hit area the size of its words). Scanned PDFs fail with a clear OCR-specific message instead of appearing to import empty content.
 
 ### Catalog
 
@@ -123,7 +129,7 @@ Unchanged for custom vs catalog:
 2. Stitch every recognition result into one transcript (`RequestTranscript` per request, see below).
 3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` — matched / missed / extra.
 4. Read each miss down to the consonant (`SoundCheck`, below).
-5. Show `ReadAloudResultView`, then reset on Done, run the same passage on Retry, or run **Drill what you missed** or a sound's **Practice** (below).
+5. Show `ReadAloudResultView`, then reset on Done, run the same passage on Retry, or run **Drill what you missed** or a sound's **Practice** (below); after a drill, **Read full passage** goes back to the passage it came from.
 
 The session auto-starts listening; there is no pre-roll state to tap through.
 
@@ -181,6 +187,12 @@ side, overlapping stretches merged (`ReadAloudResult.missedPhrases`, built by
 (`ReadAloudSessionView.drilledPassage`), so the next rep is spent only on what
 went wrong instead of re-reading clean sentences.
 
+A drill's result offers **Read full passage** (`ReadAloudResultView.onReadFullPassage`,
+set only while `drilledPassage` is non-nil) in place of Drill what you missed:
+the drill's own misses were a near-copy of Try again, and checking the fix on
+the whole passage was the step the loop lacked. Before it, Retry repeated the
+drill and Done left.
+
 **Sounds to check.** The recognizer hears words, not sounds, so nothing here
 scores pronunciation. What it can do is read a miss: when "three" comes back as
 "free", the two words differ by exactly one consonant, and that consonant is
@@ -208,7 +220,14 @@ result screen shows the top three under **Sounds to check** with the words
 **Practice** button that runs each word on its own and then the stretches of
 the page it came from. The word review marks the slipped letters in the passage,
 and `WordDetailSheet` shows the marked word, the one-line summary and the tip,
-live during the read as well as on the result. Copy says what was heard
+live during the read as well as on the result. **Its speaker works mid-read:**
+the session passes `onHear`, which plays the word under the same hold as Hear
+it (`playModel` — `pauseForModel`, speak, and the session's
+`onChange(of: isSpeaking)` resumes). It used to say "Stop session to hear
+pronunciation", and stopping scored the read; on a Minimal pairs pack, hearing
+the word is the point. The sheet closes with `Button(role: .close)`, scrolls,
+and opens at `.medium` / `.large` (the fixed 320pt height clipped at large
+text sizes). Copy says what was heard
 ("sounded like", "wasn't heard") and never claims a diagnosis or accent work.
 
 The alignment has to keep what was heard for any of this to work. A near miss
@@ -280,17 +299,19 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Presented from Practice Hub **tools** section (pushed full page through `ToolPresentation.pushed` via `navigationDestination`), Today, and RecordingDetail next-steps as sheets, not its own tab.
 - Difficulty coloring uses `AppColors.difficultyColor`, not raw system colors.
 - Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`); kept ones persist on `UserSettings.savedReadAloudTexts`. Neither is appended to the seed array.
-- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segments` and every matched word intact. It is one of the service's holds, so the clock stops while the model plays and the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. Copy must not claim accent therapy; the score remains alignment and clarity.
+- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segments` and every matched word intact. It is one of the service's holds, so the clock stops while the model plays and the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. **It plays from the start of the sentence the reader is in** (`ReadAloudSessionView.modelLine(in:from:)` walks back from `currentWordIndex` to the word after the last `.` `!` `?` `…`) through to the end; before the first word that is the whole passage. It used to replay from word one, so a reader who fumbled line five sat through lines one to four first. The hold lives in one helper, `playModel`, shared with the word sheet. Copy must not claim accent therapy; the score remains alignment and clarity.
+- **Session chrome is glass on the canvas, one white button at a time.** The ✕ is the runner `.glassCircle()` the warm-up and confidence screens wear; the clock and live accuracy are `.glassEffect(.regular, in: .capsule)` with `.statValue` numerals (the accuracy was the only live number without tabular figures); progress is `TickMeter`, not a gradient capsule, and is not animated (a `Canvas` reads it — gotcha §28). While the mic is stalled, **Resume reading** is the white primary and Done drops to `.secondary`. The ✕ plays `Haptics.light()`, not `warning`, on every tap.
+- **A start failure offers Try Again** (`viewModel.retryPassage()`) beside Close, unless it needs Settings; it used to offer only Close, back to the list.
 - Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy. A slip on one word of a pair is a miss with the heard word kept, not a skip (`isSlip`), which is what lets **Sounds to check** name the consonant.
 - **Sounds to check reads misses, it does not score sounds.** `ConsonantAnalyzer` only runs on `.mismatched(spoken:)` words and only reports one related consonant. Keep it that narrow: widening it (extra consonants, unrelated swaps, function words) mostly flags misreads, and the tip would coach a sound the reader made fine. Marked letters change colour and underline only, never weight or size (see the metrics note below).
 - **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts. A recognizer that stops for good sets `service.recognitionFailureMessage` and **stalls** the read (clock stopped, "Mic stopped", **Resume reading**); finishing from there lands on the result screen with a warning notice that says only the part heard was scored, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
 - **A dead mic must never sit under a live clock.** `ReadAloudViewModel.startTimer` also ends the session when `service.isListening` goes false while the state still says `.listening`. Every known way to lose the mic is a hold now, so that only fires for something unforeseen — and the old behaviour there (frozen passage, "Not listening", a disabled Done button, restart from the top) is precisely what a dropped read felt like.
 - **The session cover is presented on the passage, the result cover on the result** (`fullScreenCover(item:)`). Both used to be `isPresented:` flags over state that `viewModel.reset()` or Retry clears, which drew an empty cover for the length of a dismissal. Gotcha §27.
 - The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), words said wrong kept as misses with what was heard (`isSlip`), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
-- Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
-- Result layout: a pinned header (passage title, **Done**) so leaving never means scrolling past the word review; the accuracy ring counts up with `Haptics.playCountUp` under a one-line verdict; three stat tiles in one neutral recipe (colour lives in the icon — they used to be three shades of tinted glass); the legend wraps; Try again and Drill what you missed are full-width at the end.
+- Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s). It counts only words said (matched or said differently): `mismatchedWords` also counts skips, and a skipped line was never spoken, so counting it read as rushing when the reader had jumped ahead.
+- Result layout: a pinned header (passage title, **Done** as a small secondary `GlassButton`) so leaving never means scrolling past the word review; the accuracy ring counts up with `Haptics.playCountUp` under a one-line verdict; three stat tiles in one neutral recipe (colour lives in the icon — they used to be three shades of tinted glass) with `.metricValue` numerals; "Sounds to check" and "Word review" are `GlassSectionHeader`s and each sound card titles itself with `GlassCardTitle`; the legend wraps; Try again and Drill what you missed (or Read full passage, after a drill) ride a `.safeAreaBar(edge: .bottom)`, so the next rep never sits under the whole word review.
 - Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.
-- Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
+- Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are `.accessibilityHidden`, and every read (settled) word carries `.isButton`, because a tap opens its sheet.
 - **Nothing about a word's match state may change its measured size.** The whole passage draws at one weight (`ReadAloudPassageText.weight`); position is carried by the highlight fill and the colour ramp. The current word used to render `.bold` against `.regular` neighbours, and because bold glyphs are wider, every cursor advance re-flowed the rest of the line — the passage visibly squirmed while being read. Auto-scroll re-centres once per `scrollAdvanceWords` (8) rather than every second word, which was the other half of the same complaint.
 - `WrappingHStack` caches its measurement pass per (width, `metricsKey`), with a first-subview probe as a tripwire for callers that do not pass a key. Without the cache it re-measured every subview in **both** `sizeThatFits` and `placeSubviews`, so a 150-word passage cost ~300 text measurements per layout pass, on every partial recognition result. See gotchas §25.
 - **The clock does not rebuild the passage.** The passage is its own view (`ReadAloudPassageText`, taking `words` / `states` / `fontSize` and a `selectedWord` binding), and the elapsed time is read only inside `ReadAloudClock`. `ReadAloudViewModel.startTimer` still polls every 250 ms but writes `elapsedTime` only when the whole second changes. The clock used to be read in the session body, so every quarter second re-ran it: the `ForEach` over every word, and a fresh split of `currentPassage.words`.

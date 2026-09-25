@@ -33,7 +33,8 @@ struct RingStatsView: View {
                     GaugeItem(
                         progress: Double(score) / 100,
                         color: AppColors.scoreColor(for: score),
-                        value: score > 0 ? "\(score)" : "-",
+                        count: score > 0 ? Double(score) : nil,
+                        format: { "\($0)" },
                         label: "Avg Score",
                         sweepDelay: 0
                     )
@@ -41,7 +42,8 @@ struct RingStatsView: View {
                     GaugeItem(
                         progress: Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)),
                         color: AppColors.primary,
-                        value: "\(sessions)/\(sessionsGoal)",
+                        count: Double(sessions),
+                        format: { "\($0)/\(sessionsGoal)" },
                         label: "This Week",
                         sweepDelay: 0.08
                     )
@@ -49,41 +51,56 @@ struct RingStatsView: View {
                     GaugeItem(
                         progress: improvementRingProgress,
                         color: improvementColor,
-                        value: improvementText,
+                        count: abs(improvement) < 0.5 ? nil : improvement.rounded(),
+                        format: { "\($0 > 0 ? "+" : "")\($0)%" },
                         label: "Trend",
                         sweepDelay: 0.16
                     )
                 }
 
-                VStack(spacing: 12) {
-                    Rectangle()
-                        .fill(.white.opacity(0.08))
-                        .frame(height: 0.5)
+                // No row until there is a best to show: on day one it was a
+                // "-" beside a red trophy, because a score of 0 sits in the
+                // lowest band of the ramp.
+                if bestScore > 0 {
+                    VStack(spacing: 12) {
+                        Rectangle()
+                            .fill(.white.opacity(0.08))
+                            .frame(height: 0.5)
 
-                    HStack {
-                        HStack(spacing: 6) {
-                            Image(systemName: "trophy.fill")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AppColors.scoreColor(for: bestScore))
-                            Text("Best score")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        HStack {
+                            HStack(spacing: 6) {
+                                Image(systemName: "trophy.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AppColors.scoreColor(for: bestScore))
+                                Text("Best score")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Text("\(bestScore)")
+                                .font(.statValue)
+                                .foregroundStyle(.white)
+                                .contentTransition(.numericText(value: Double(bestScore)))
+                                .motion(AppMotion.settle, value: bestScore)
                         }
-
-                        Spacer()
-
-                        Text(bestScore > 0 ? "\(bestScore)" : "-")
-                            .font(.statValue)
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText(value: Double(bestScore)))
-                            .motion(AppMotion.settle, value: bestScore)
                     }
+                    .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Stats: 7-day trend \(improvementText), \(sessions) of \(sessionsGoal) sessions this week, average score \(score) out of 100, best score \(bestScore)")
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var parts = ["\(sessions) of \(sessionsGoal) sessions this week"]
+        parts.append(score > 0 ? "average score \(score) out of 100" : "no average score yet")
+        if abs(improvement) >= 0.5 { parts.append("7-day trend \(improvementText)") }
+        if bestScore > 0 { parts.append("best score \(bestScore)") }
+        return "Stats: " + parts.joined(separator: ", ")
     }
 }
 
@@ -92,7 +109,9 @@ struct RingStatsView: View {
 private struct GaugeItem: View {
     let progress: Double
     let color: Color
-    let value: String
+    /// The number in the ring; nil shows a dash - nothing to count yet.
+    let count: Double?
+    let format: (Int) -> String
     let label: String
     /// Stagger, so the three rings sweep left to right like one gesture.
     var sweepDelay: Double = 0
@@ -107,14 +126,23 @@ private struct GaugeItem: View {
                     .frame(width: 78, height: 78)
                     .motion(.spring(duration: 1.1, bounce: 0.12).delay(sweepDelay), value: progress)
 
-                Text(value)
-                    .font(.statValue)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(.horizontal, 12)
-                    .contentTransition(.numericText())
-                    .motion(AppMotion.settle, value: value)
+                // The number counts along with its ring (rule 5a) instead of
+                // rolling once beside it. It rides the ring's timing without
+                // the bounce - an overshoot reads as a wrong score, not a
+                // spring. Always mounted, so a first value counts up from 0.
+                ZStack {
+                    Text("–")
+                        .foregroundStyle(.white.opacity(0.45))
+                        .opacity(count == nil ? 1 : 0)
+
+                    CountUpText(value: count ?? 0, font: .statValue, format: format)
+                        .opacity(count == nil ? 0 : 1)
+                }
+                .font(.statValue)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 12)
+                .motion(.spring(duration: 1.1, bounce: 0).delay(sweepDelay), value: count)
             }
 
             Text(label).eyebrowStyle()

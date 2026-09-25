@@ -2,8 +2,13 @@ import SwiftUI
 
 struct ConfidenceExerciseView: View {
     let exercise: ConfidenceExercise
+    /// Runs once the last step is done - a lesson's Calm step completes on
+    /// this, not on the sheet merely opening and closing.
+    var onComplete: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentStepIndex = 0
+    @State private var showingExitConfirm = false
     @State private var isComplete = false
     /// The side the next step card slides in from.
     @State private var stepEdge: Edge = .trailing
@@ -28,15 +33,7 @@ struct ConfidenceExerciseView: View {
 
             VStack(spacing: 32) {
                 HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .glassCircle()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close exercise")
+                    closeButton
 
                     Spacer()
 
@@ -78,6 +75,44 @@ struct ConfidenceExerciseView: View {
         }
     }
 
+    // MARK: - Close
+
+    /// Past the first step, or guiding, ✕ asks first - like the warm-up and
+    /// drill runners. Guided mode is minutes with your eyes shut, and a stray
+    /// tap used to throw the whole exercise away.
+    private var isMidRun: Bool {
+        !isComplete && (currentStepIndex > 0 || isGuided)
+    }
+
+    private var closeButton: some View {
+        Button {
+            if isMidRun {
+                Haptics.warning()
+                showingExitConfirm = true
+            } else {
+                dismiss()
+            }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .glassCircle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Close exercise")
+        .confirmationDialog(
+            "End this exercise?",
+            isPresented: $showingExitConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("End Exercise", role: .destructive) { dismiss() }
+            Button("Keep Going", role: .cancel) {}
+        } message: {
+            Text("Progress in this exercise won't be saved.")
+        }
+    }
+
     // MARK: - Guided mode
 
     private var guideToggle: some View {
@@ -85,17 +120,18 @@ struct ConfidenceExerciseView: View {
             Haptics.light()
             isGuided.toggle()
         } label: {
-            Label(
-                isGuided ? "Guided" : "Guide me",
-                systemImage: isGuided ? "speaker.wave.2.fill" : "speaker.wave.2"
-            )
+            // One name in both states - the fill, the tint and `.isSelected`
+            // carry on/off, so VoiceOver and Voice Control hear one control.
+            Label("Guide me", systemImage: isGuided ? "speaker.wave.2.fill" : "speaker.wave.2")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(isGuided ? exercise.category.color : .white)
             .padding(.horizontal, 14)
             .frame(height: 44)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
-        .accessibilityLabel(isGuided ? "Stop reading steps aloud" : "Read each step aloud and move on automatically")
+        .buttonStyle(.plain)
+        .accessibilityHint("Reads each step aloud and moves on by itself")
+        .accessibilityAddTraits(isGuided ? .isSelected : [])
     }
 
     /// Restarts the guided loop whenever the step changes by any route - the
@@ -147,12 +183,12 @@ struct ConfidenceExerciseView: View {
 
             Spacer()
 
-            GlassCard(cornerRadius: 20, tint: exercise.category.color) {
+            // Featured tint (0.10), not the category colour at full strength:
+            // `GlassCard` applies its tint as given, and this card used to be
+            // a solid jewel slab.
+            GlassCard(cornerRadius: 20, tint: exercise.category.color.opacity(0.10)) {
                 VStack(spacing: 16) {
-                    Image(systemName: exercise.category.icon)
-                        .font(.system(size: 36))
-                        .foregroundStyle(exercise.category.color)
-                        .accessibilityHidden(true)
+                    IconChip(icon: exercise.category.icon, tint: exercise.category.color, size: 56)
 
                     Text(exercise.step(safelyAt: currentStepIndex))
                         .font(.title3.weight(.medium))
@@ -163,7 +199,7 @@ struct ConfidenceExerciseView: View {
                 .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
                 .id(currentStepIndex)
-                .transition(.asymmetric(
+                .transition(reduceMotion ? .opacity : .asymmetric(
                     insertion: .opacity.combined(with: .move(edge: stepEdge)),
                     removal: .opacity
                 ))
@@ -281,21 +317,27 @@ struct ConfidenceExerciseView: View {
         .padding(.bottom, 8)
     }
 
+    /// Steps slide like cards; under Reduce Motion they cross-fade.
+    private var stepAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : AppMotion.slide
+    }
+
     private func goBack() {
         guard currentStepIndex > 0 else { return }
         ChirpPlayer.shared.play(.tick)
         stepEdge = .leading
-        withAnimation(AppMotion.slide) { currentStepIndex -= 1 }
+        withAnimation(stepAnimation) { currentStepIndex -= 1 }
     }
 
     private func advance() {
         stepEdge = .trailing
-        withAnimation(AppMotion.slide) {
+        withAnimation(stepAnimation) {
             if currentStepIndex < exercise.steps.count - 1 {
                 currentStepIndex += 1
                 ChirpPlayer.shared.play(.tick)
             } else {
                 isComplete = true
+                onComplete?()
                 PracticeRoutineService.shared.complete(.calm)
                 ChirpPlayer.shared.play(.exhale)
                 Haptics.success()

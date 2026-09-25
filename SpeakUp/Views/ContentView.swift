@@ -40,7 +40,6 @@ struct ContentView: View {
 
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
-    @State private var recordingGoalId: UUID?
     @State private var recordingStoryId: UUID?
     @State private var recordingChallenge: SharedChallenge?
     @State private var hasEvaluatedOnboarding = false
@@ -72,12 +71,42 @@ struct ContentView: View {
     private var timerEndBehavior: TimerEndBehavior {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
+
+    /// The take length from Settings → Session Defaults, for starts from a
+    /// surface with no length control of its own (a Library or wheel prompt,
+    /// a coach note, a deep link). Today passes its pill; a repeat passes the
+    /// original take's length.
+    private var defaultTakeDuration: RecordingDuration {
+        RecordingDuration(rawValue: userSettings.first?.defaultDuration ?? 60) ?? .sixty
+    }
+
+    /// What the prepare countdown names when there is no prompt card to show.
+    /// A story or free-talk take used to count down over a bare dial. Only
+    /// while the countdown is up: Cancel clears the prompt and story as the
+    /// cover animates out, which would otherwise flash "Free talk" on the way.
+    private var countdownPrepTitle: String? {
+        guard showingCountdown, recordingPrompt == nil else { return nil }
+        guard let storyId = recordingStoryId else { return "Free talk" }
+        let title = storiesViewModel.stories.first { $0.id == storyId }?.title ?? ""
+        return title.isEmpty ? "Your story" : title
+    }
+
+    private var countdownPrepSubtitle: String? {
+        guard showingCountdown, recordingPrompt == nil else { return nil }
+        let length = recordingDuration.displayName
+        return recordingStoryId == nil ? "Any topic · \(length)" : "Story · \(length)"
+    }
     
     private func tabContent(for tab: AppTab) -> some View {
         NavigationStack {
             tabRoot(for: tab)
                 .background { AppBackground() }
         }
+        // Inside the tab, whose bottom safe area ends at the top of the tab
+        // bar. As a sibling of the `TabView` the bar sat in the shell's safe
+        // area, which ends at the home indicator - 8pt above that is inside
+        // the floating tab bar, so the bar covered the tabs it should sit on.
+        .safeAreaBar(edge: .bottom, spacing: 0) { routineHandoffOverlay }
     }
 
     @ViewBuilder
@@ -123,7 +152,7 @@ struct ContentView: View {
                 onSelectPrompt: { prompt in
                     recordingPrompt = prompt
                     recordingStoryId = nil
-                    recordingDuration = .sixty
+                    recordingDuration = defaultTakeDuration
                     adoptChallengeIfMatching(prompt)
                     showingCountdown = true
                 },
@@ -167,6 +196,9 @@ struct ContentView: View {
                 },
                 onShowToday: {
                     selectedTab = .today
+                },
+                onPracticeScenario: { scenario in
+                    startScenarioPractice(scenario)
                 }
             )
             .navigationDestination(item: $selectedRecordingId) { recordingId in
@@ -218,10 +250,7 @@ struct ContentView: View {
                     .transition(.opacity)
                     .zIndex(5)
             }
-
-            routineHandoffOverlay
         }
-        .motion(AppMotion.settle, value: routine.handoff)
         .environment(\.appTour, appTour)
         .environment(\.glassAppearance, glassAppearance)
         .environment(\.appCanvas, appCanvas)
@@ -398,30 +427,32 @@ struct ContentView: View {
 
     // MARK: - Routine
 
-    /// Sits above the tab bar rather than inside the screen that finished,
+    /// Sits on the tab bar rather than inside the screen that finished,
     /// because that screen is a sheet on its way out - set while the sheet is
-    /// still up, the bar is simply already there when it goes. The tour
-    /// outranks it: a spotlight with a bar floating over it teaches nothing.
+    /// still up, the bar is simply already there when it goes. Each tab's
+    /// `safeAreaBar` hosts it (`tabContent(for:)`), so it rides above the tab
+    /// bar and lifts the scroll content clear of itself. The tour outranks
+    /// it: a spotlight with a bar floating over it teaches nothing.
     ///
     /// Split out of `body` deliberately; the shell is already near the
     /// type-checker's budget for one expression (gotchas §15).
-    @ViewBuilder
     private var routineHandoffOverlay: some View {
-        if let handoff = routine.handoff, appTour.activeStep == nil {
-            RoutineHandoffBar(
-                handoff: handoff,
-                onTake: {
-                    routine.advance()
-                    openPendingRoutineStep()
-                },
-                onDismiss: routine.dismissHandoff
-            )
-            .padding(.horizontal, AppLayout.pageHorizontal)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-            .zIndex(4)
+        VStack(spacing: 0) {
+            if let handoff = routine.handoff, appTour.activeStep == nil {
+                RoutineHandoffBar(
+                    handoff: handoff,
+                    onTake: {
+                        routine.advance()
+                        openPendingRoutineStep()
+                    },
+                    onDismiss: routine.dismissHandoff
+                )
+                .padding(.horizontal, AppLayout.pageHorizontal)
+                .padding(.bottom, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .motion(AppMotion.settle, value: routine.handoff)
     }
 
     /// Opens whatever the routine is asking for. `.session` is deliberately left
@@ -445,9 +476,20 @@ struct ContentView: View {
             showingReadAloud = true
         case .review:
             routine.clearPendingStep()
-            selectedTab = .history
+            openLatestTake()
         case .session:
             selectedTab = .today
+        }
+    }
+
+    /// "Read the score" means the take just recorded, so it opens that take's
+    /// breakdown rather than the History list it would have to be found in.
+    private func openLatestTake() {
+        var latest = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        latest.fetchLimit = 1
+        selectedTab = .history
+        if let recording = try? modelContext.fetch(latest).first {
+            selectedRecordingId = recording.id.uuidString
         }
     }
 
@@ -460,7 +502,7 @@ struct ContentView: View {
         case .practiceAgain:
             recordingPrompt = nil
             recordingStoryId = nil
-            recordingDuration = .sixty
+            recordingDuration = defaultTakeDuration
             recordingChallenge = nil
             showingCountdown = true
         case .close:
@@ -549,7 +591,8 @@ struct ContentView: View {
                     countdownStyle: countdownStyle,
                     look: countdownLook,
                     backdrop: recordingBackdrop,
-                    selectedGoalId: $recordingGoalId,
+                    prepTitle: countdownPrepTitle,
+                    prepSubtitle: countdownPrepSubtitle,
                     challenge: recordingChallenge,
                     onComplete: {
                         showingCountdown = false
@@ -559,7 +602,6 @@ struct ContentView: View {
                         showingCountdown = false
                         recordingPrompt = nil
                         recordingStoryId = nil
-                        recordingGoalId = nil
                         recordingChallenge = nil
                     }
                 )
@@ -578,7 +620,6 @@ struct ContentView: View {
             duration: recordingDuration,
             timerEndBehavior: timerEndBehavior,
             countdownStyle: countdownStyle,
-            goalId: recordingGoalId,
             storyId: recordingStoryId,
             sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
             onSavedAndClosed: { recording in
@@ -639,12 +680,32 @@ struct ContentView: View {
         }
     }
 
+    /// History › Progress › "Where to improve": a take on a prompt from that
+    /// situation, preferring one not yet answered. A scenario with no prompts
+    /// (every category of it switched off) opens the Library instead of
+    /// doing nothing.
+    private func startScenarioPractice(_ scenario: PracticeScenario) {
+        let prompts = ((try? modelContext.fetch(FetchDescriptor<Prompt>())) ?? []).filter {
+            ScenarioReadinessEngine.scenario(forRawCategory: $0.category) == scenario
+        }
+        let answered = Set(((try? modelContext.fetch(FetchDescriptor<Recording>())) ?? []).compactMap { $0.prompt?.id })
+        guard let prompt = prompts.filter({ !answered.contains($0.id) }).randomElement() ?? prompts.randomElement() else {
+            selectedTab = .library
+            return
+        }
+        recordingPrompt = prompt
+        recordingStoryId = nil
+        recordingDuration = defaultTakeDuration
+        adoptChallengeIfMatching(prompt)
+        showingCountdown = true
+    }
+
     private func startRecording(from url: URL) {
         guard !showOnboarding, !showingRecording, !showingCountdown else { return }
 
         recordingPrompt = nil
         recordingStoryId = nil
-        recordingGoalId = nil
+        recordingDuration = defaultTakeDuration
         recordingChallenge = nil
 
         let payload = SharedPromptLink.payload(from: url) ?? SharedPromptPayload()

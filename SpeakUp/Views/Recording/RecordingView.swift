@@ -14,6 +14,11 @@ struct RecordingView: View {
     @State private var overlayReviewing: Set<String> = []
     @State private var overlayTitle = "Your Words"
     @State private var completedRecording: Recording?
+    /// Decided once, when the take lands: the first analyzed take goes
+    /// straight to its score, so it never shows a check-in at all. Passing
+    /// the raw setting showed the questions and then pulled them away
+    /// mid-answer the moment scoring finished.
+    @State private var skipsCheckIn = false
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
     @State private var revealRecording: Recording?
@@ -41,6 +46,8 @@ struct RecordingView: View {
     var storyId: UUID? = nil
     var sessionSource: String? = nil
     var initialFramework: SpeechFramework? = nil
+    /// A lesson take's task, shown in the prompt's place.
+    var brief: String? = nil
     var onSavedAndClosed: ((Recording) -> Void)? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
@@ -110,11 +117,14 @@ struct RecordingView: View {
             let container = modelContext.container
             let weights = ScoreWeights(from: userSettings.first)
             // No session to exclude - this runs before one exists.
-            focusPlan = await PersonalAverage.snapshot(
+            let plan = await PersonalAverage.snapshot(
                 excluding: UUID(),
                 container: container,
                 weights: weights
             ).plan
+            // Today's bar: a take never names a focus Today has not shown.
+            guard let plan, plan.sessionCount >= TodayView.focusMinimumSessions else { return }
+            focusPlan = plan
         }
         .onDisappear {
             revealTask?.cancel()
@@ -176,11 +186,10 @@ struct RecordingView: View {
         return DefaultFeedbackQuestions.questions + custom
     }
 
-    private var feedbackGateActive: Bool {
-        guard let id = completedRecording?.id else {
-            return feedbackEnabled && !feedbackQuestions.isEmpty
-        }
-        return feedbackEnabled && !feedbackQuestions.isEmpty && !isFirstAnalyzedSession(excluding: id)
+    /// The check-in runs for this take: on in settings, questions to ask, and
+    /// not the first analyzed take (`skipsCheckIn`).
+    private var checkInActive: Bool {
+        feedbackEnabled && !feedbackQuestions.isEmpty && !skipsCheckIn
     }
 
     /// True when no *prior* take has a transcript yet - this session is the
@@ -203,7 +212,7 @@ struct RecordingView: View {
                 recording: recording,
                 isModelLoading: speechService.isLoadingModel,
                 isDownloadingModel: speechService.isDownloadingModel,
-                feedbackEnabled: feedbackEnabled,
+                feedbackEnabled: checkInActive,
                 feedbackQuestions: feedbackQuestions,
                 existingFeedback: recording.sessionFeedback,
                 onFeedbackSubmitted: { feedback in
@@ -226,8 +235,8 @@ struct RecordingView: View {
             )
         }
         .task(id: gateStateKey(for: recording)) {
-            // Feedback active: wait for user to submit - onFeedbackCompleted drives navigation
-            if feedbackGateActive { return }
+            // Check-in active: wait for the user - onFeedbackCompleted drives navigation.
+            if checkInActive { return }
 
             let stillProcessing =
                 recording.isProcessing ||
@@ -365,10 +374,7 @@ struct RecordingView: View {
                         .font(.title.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
-                        .background {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                        }
+                        .glassCircle()
                 }
                 .accessibilityLabel("Cancel recording")
                 .confirmationDialog(
@@ -396,8 +402,14 @@ struct RecordingView: View {
                 sessionOptionsMenu
             }
 
-            if let prompt, viewModel.isRecording {
+            // The prompt stays up from the first frame. It used to wait for
+            // `isRecording`, so the hand-off from the countdown blinked it out
+            // for the moment the mic took to open, then popped it back in and
+            // stepped the dial down a rung.
+            if let prompt {
                 compactPromptCard(prompt)
+            } else if let brief {
+                lessonBriefCard(brief)
             } else if let focusPlan, !focusPlan.isGraduating {
                 focusIntentPill(focusPlan)
             }
@@ -412,6 +424,26 @@ struct RecordingView: View {
             }
         }
         .animation(AppMotion.settle, value: showingVocabStrip)
+    }
+
+    /// A lesson take's task, in the prompt's place. The app-wide focus pill
+    /// used to sit here instead - "Fillers" inside a PREP lesson - and the
+    /// task itself was gone the moment the recorder opened.
+    private func lessonBriefCard(_ brief: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label("Lesson task", systemImage: "graduationcap")
+                .eyebrowStyle()
+
+            Text(brief)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(cornerRadius: 14)
+        .accessibilityElement(children: .combine)
     }
 
     /// Stand-in for the prompt card's focus line on a take with no prompt.
@@ -434,8 +466,7 @@ struct RecordingView: View {
         .foregroundStyle(AppColors.primary)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+        .glassEffect(.regular, in: .capsule)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .transition(.opacity)
@@ -462,7 +493,7 @@ struct RecordingView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background { Circle().fill(.ultraThinMaterial) }
+                .glassCircle()
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -600,12 +631,15 @@ struct RecordingView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+        // Painted rather than glass: the cue fades in and out mid-take, and
+        // glass animated on or off samples its backdrop wrong mid-fade and
+        // flashes a dark plate (ui-design-system rule 14). Same recipe as a
+        // capsule on a glass plate.
         .background {
             Capsule()
-                .fill(.ultraThinMaterial)
+                .fill(Color.white.opacity(0.10))
                 .overlay {
-                    Capsule()
-                        .strokeBorder(cue.tint.opacity(0.4), lineWidth: 0.5)
+                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
                 }
         }
         // The cue is its own row now, so it sizes to its own text rather than
@@ -671,15 +705,11 @@ struct RecordingView: View {
                     }
                 )
 
+                // A plain caption, like the drill screen's. In a capsule it
+                // read as a second button under the real one.
                 Text(isRecording ? "Tap to stop" : "Tap to start recording")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.6))
                     .id(isRecording)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     .animation(.easeInOut(duration: 0.2), value: isRecording)
@@ -690,6 +720,7 @@ struct RecordingView: View {
 
     private func handleRecordingCompletion(_ recording: Recording) {
         guard completedRecording == nil, !hasNavigated else { return }
+        skipsCheckIn = isFirstAnalyzedSession(excluding: recording.id)
         viewModel.submitForAnalysis(recording)
         // No haptic here: `stopRecording` already fired the success buzz on
         // every path that lands here, and a second one read as a double tap.
@@ -912,14 +943,7 @@ struct MicLevelPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .stroke(isHearing ? .clear : AppColors.warning.opacity(0.4), lineWidth: 1)
-                }
-        }
+        .glassEffect(.regular, in: .capsule)
         .animation(AppMotion.settle, value: isHearing)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isHearing ? "Microphone is picking up sound" : "No sound reaching the microphone")

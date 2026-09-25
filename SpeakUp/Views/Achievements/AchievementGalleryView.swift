@@ -37,9 +37,7 @@ struct AchievementGalleryView: View {
 
                         if !unlocked.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
-                                Label("Unlocked", systemImage: "star.fill")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
+                                GlassSectionHeader("Unlocked")
 
                                 LazyVGrid(
                                     columns: [GridItem(.flexible()), GridItem(.flexible())],
@@ -54,9 +52,7 @@ struct AchievementGalleryView: View {
 
                         if !locked.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
-                                Label("Locked", systemImage: "lock.fill")
-                                    .font(.headline)
-                                    .foregroundStyle(.secondary)
+                                GlassSectionHeader("Locked")
 
                                 LazyVGrid(
                                     columns: [GridItem(.flexible()), GridItem(.flexible())],
@@ -74,7 +70,9 @@ struct AchievementGalleryView: View {
             }
             .scrollIndicators(.hidden)
         }
+        // Inline like every other page - this was the app's one large title.
         .navigationTitle("Awards")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
@@ -143,13 +141,19 @@ private struct AchievementCard: View {
                 Text(achievement.title)
                     .font(.subheadline.weight(.semibold))
                     .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .foregroundStyle(achievement.isUnlocked ? .primary : .secondary)
 
+                // Two lines reserved and the stack pinned to the top, so
+                // the badges and the status line sit level across a row;
+                // centred content put a one-line card's badge 15pt lower
+                // than its neighbour's.
                 Text(achievement.descriptionText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2, reservesSpace: true)
 
                 Group {
                     if let date = achievement.unlockedDate {
@@ -167,7 +171,7 @@ private struct AchievementCard: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 150)
+            .frame(maxWidth: .infinity, minHeight: 150, alignment: .top)
         }
         .opacity(achievement.isUnlocked ? 1 : 0.6)
         .scaleEffect(appeared ? 1 : 0.95)

@@ -23,7 +23,9 @@ language profile, metric charts, then-vs-now replay, PDF journal export.
 
 ## Recordings list shape
 
-Grouped by calendar week (`HistoryWeek.group`, in `HistoryView.swift`), newest first, after search and filter apply. Each week is a `GlassSectionHeader` ("This week", "Last week", then "Sep 7 – 13", with the year once it is not this one) whose accessory is `N takes · avg S` - the average skips unscored takes and drops out when none scored. The week's takes are rows inside **one** `GlassCard` separated by `MetricRowDivider`, not a card per take: a flat stack of cards repeated the full date on every row and spent most of the screen on chrome. `RecordingRow` is content only (no card of its own) and prints weekday + time, since the header already carries the week.
+Grouped by calendar week (`HistoryWeek.group`, in `HistoryView.swift`), newest first, after search and filter apply. Each week is a `GlassSectionHeader` ("This week", "Last week", then "Sep 7 – 13", with the year once it is not this one) whose accessory is `N takes · avg S` - the average skips unscored takes and drops out when none scored. The week's takes are rows inside **one** `GlassRowGroup` (hairline-separated, the same plate Settings groups its rows on; a row presses with `RowPressStyle`, which lights it edge to edge - `.plain` gave no sign a tap landed), not a card per take: a flat stack of cards repeated the full date on every row and spent most of the screen on chrome. `RecordingRow` is content only (no card of its own) and prints weekday + time, since the header already carries the week.
+
+Above the weeks, `ActivityStrip` ("Practice activity") is ~17 weeks as a dot grid with a Sessions / Score switch. **Tap a day and the footer reads it** (`Wed, Sep 23 · 2 sessions · avg 78`, outlined cell, selection haptic); tap it again for the total. A tap, not a drag: the grid is tall enough that a drag would catch the scroll.
 
 ## Progress page shape (conclusion → evidence → guidance)
 
@@ -37,30 +39,77 @@ intent: verdict, then the charts they came for, then guidance.
    made physical), the momentum verdict opposite it ("+N pts lately" caption
    beneath), then cadence stats (Best · Average · This week).
 2. **Evidence — trends first.** The trends chapter (`GlassSectionHeader`
-   "Trends" with a "N sessions" accessory): chart tabs (`ChartTab`: Score /
-   Pace / Fillers / Language / Skills / Activity), time-range menu, and the
-   selected chart. All trend plots share `TrendChart.plotHeight` (210) so tab
-   switches don't reflow; card headers use `GlassCardTitle`. The picker is
+   "Trends" whose accessory is the window's session count + the time-range
+   menu): chart tabs (`ChartTab`: Score / Pace / Fillers / Language / Skills /
+   Activity) and the selected chart. The range menu lives in the header, not
+   beside the tabs - next to six tabs it overflowed a phone and dropped the
+   row onto a scrolling rail. It is a `Picker` inside a `Menu` (native
+   checkmark, VoiceOver value), a 44pt target around a smaller capsule, and it
+   stays in the layout (hidden) for Skills / Language, which ignore the
+   window. All trend plots share `TrendChart.plotHeight` (210) so tab switches
+   don't reflow; card headers use `GlassCardTitle`. The tab picker is
    icon-free text segments in a `ViewThatFits`: equal-width single row when
-   six labels fit, scrolling rail at accessibility sizes — every destination
-   visible, nothing hiding behind an unmarked scroll. Skills renders
+   six labels fit, scrolling rail at accessibility sizes. Skills renders
    `SkillBreakdownCard` (the same `SubscoreRadarChart` sunburst as the
    session detail hero).
+   - **Thin windows.** Skills and Language never pass through the window's
+     empty check (Skills used to say "try widening the time range" with the
+     menu hidden). Score / Pace need two takes in the window, Fillers /
+     Activity two weeks; short of that the tab shows one card saying so with
+     a **Show all time** button. The page opens on 30 days, widened to 90 or
+     all time the first time the window holds fewer than two takes
+     (`TimeRange.opening(for:)`), so a returning user never opens on an
+     empty plot.
+   - **Pinned points.** `chartDateScrub` pins the nearest point when the
+     finger lifts; a tap on the pinned point clears it, and a change in the
+     plotted collection resets it. On Score and Pace the readout is a row
+     with a chevron that opens the take (`onSelectRecording`); nil (Today's
+     push) keeps it read-only. Drops in readouts are amber, never red.
+   - **Activity** zero-fills weeks from the first practiced one, so "% goal
+     hit" counts missed weeks; the current week counts only once it meets
+     the goal.
 3. **Guidance — which situation needs work?** The scenario family (below)
    collapsed into ONE ranked card under `GlassSectionHeader("Where to
-   Improve")`.
+   improve")`.
 
-State is consolidated at the body level: while loading → bare spinner;
-< 2 analyzed sessions → one `EmptyStateCard` ("Your Progress Starts Here" /
-"One Take In"). No scattered empty states firing at once.
+**State lives in `ProgressChartsModel`**, owned by whoever shows the page
+(`HistoryView`, or `ProgressChartsView` for Today's push) and passed to
+`ProgressChartsContent`: points, lexicon, readiness, and the picked tab and
+window. History's section picker tears the Progress section down; with the
+state inside it every flip reset the tab and window, flashed the loader and
+decoded every analysis again. The spinner shows only before the first pass;
+later passes refresh behind the charts, and only when the takes changed:
+History passes `HistoryViewModel.progressFingerprint` as `reloadKey` (count,
+scored count, newest take), and a pass for the key already loaded is skipped.
+Pull-to-refresh on Progress and Today's push (no key) always reload. < 2 analyzed sessions → one `EmptyStateCard`
+("Your progress starts here" / "One take in") with **Choose today's prompt**
+(`onShowToday`, the same route and words as the empty Recordings list; hidden
+on Today's push). No scattered empty states firing at once. The pushed page's
+title is **Progress**, the name History's picker gives the same content (it
+was "Progress Charts"), and it calls `.restoresNavigationBar()` itself. The
+zero-point copy counts **scored** takes ("After two scored takes…"); it used
+to say "Record your first session" to someone whose only take had not scored.
 
-The tail after `ProgressChartsContent`: **Review** only — a 2×2 grid of
-`ToolTileLabel` tiles (compare, listen back, goals, journal; compare/listen
-hidden until two summaries exist). These stay on Progress because they need
+The tail after `ProgressChartsContent`: **Review** only — `ProgressReviewSection`,
+a 2×2 grid of `ToolTileLabel` tiles (compare, listen back, goals, journal;
+compare/listen hidden until two **scored** takes exist -
+`HistoryViewModel.scoredTakeCount`; counting every take opened them onto a
+zero score or an empty sheet). History passes the root's callbacks; Today's
+push (`ProgressChartsView`) presents the same sheets itself, so both entry
+points end on the same tools. These stay on Progress because they need
 history data; Library → Tools is prep (warm-up / drill / read aloud / calm).
 Do not merge the catalogs. Word Bank usage moved inside the Language
 tab (`ProgressChartsContent.vocabWords` → `LanguageInsightsView`), so the
 page ends at Review instead of an orphaned chip rail.
+
+**Compare** lists scored takes only and defaults to the oldest vs newest of
+them (a processing or failed newest used to read "Latest 0, −72 points"); a
+tie is "unchanged", not a red regression; the whole From / To card opens the
+take menu; breakdown rows are one `GlassRowGroup`. **Listen back** (title
+matches its tile) drives play / pause from `AudioService.isPlaying` plus the
+side that owns the player - `AudioService.play` returns once playback starts,
+so a flag reset after awaiting it left no way to pause. **Journal** keeps
+Export PDF as the sheet's primary CTA in a `.safeAreaBar`.
 
 ## Scenario readiness
 
@@ -75,8 +124,13 @@ Per-scenario readiness replaces a single ambiguous “Interview Readiness” sco
 - **Taxonomy** (exhaustive switch + tests): Interviews; Public Speaking;
   Storytelling (+ `"Story"` marker); Everyday Conversation; Everything Else
   (only when such sessions exist).
-- **UI:** one ranked card — title + momentum glyph + score, `TickMeter`,
-  meta line, optional habit-cost line; unpracticed cores show “Not yet”.
+- **UI:** one ranked `GlassRowGroup` — `IconChip` + title + momentum glyph +
+  score, `TickMeter`, meta line, optional habit-cost line; unpracticed cores
+  show “Not yet”. Rows become buttons (`RowPressStyle`, chevron) when
+  `onPracticeScenario` is passed (`HistoryView` → `ProgressChartsContent` →
+  `ScenarioReadinessSection.onPractice`); nil keeps them read-only. The root
+  picks a prompt whose category maps to the scenario
+  (`ScenarioReadinessEngine.scenario(forRawCategory:)`).
 - **Thin data:** < 4 sessions → “early read”, score capped. Momentum colors
   via `ScenarioMomentum` only (slipping = amber, never error-red).
 
@@ -85,6 +139,9 @@ Per-scenario readiness replaces a single ambiguous “Interview Readiness” sco
 `ChartTab.words` is the one Progress home for lexicon + Word Bank usage.
 
 - Crutch swaps are **sentences**, never chips. One `WordCountChip` family.
+- Rate deltas print the rate's own sign and arrow; only the colour knows
+  which way is good (`higherIsBetter`). Weak language used to pass a negated
+  delta, so a rise read "↘ −1.0". Regressions are amber, never red.
 - Engine: `LexiconInsightsEngine` on the same background POD pass; stopword /
   dual-list traps pinned by `stopwordsStayDisjointFromTheClassifiedLists`.
 - Components: `RingProgress`, `StatPair`, `MetricRow`, `StatusPill`,

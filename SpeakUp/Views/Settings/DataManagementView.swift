@@ -2,84 +2,84 @@ import SwiftUI
 
 struct DataManagementView: View {
     @Bindable var viewModel: SettingsViewModel
+    /// What the last action did. After a reset or a wipe the page used to look
+    /// exactly as it did before, with nothing to say it had worked.
+    @State private var outcome: Outcome?
+
+    private enum Outcome: Equatable {
+        case reset, cleared, failed
+
+        var message: String {
+            switch self {
+            case .reset: "Settings are back to their defaults."
+            case .cleared: "All your data has been deleted."
+            case .failed: "Something went wrong. Nothing was lost; try again."
+            }
+        }
+    }
+
+    private var syncsWithICloud: Bool { ICloudStorageService.shared.isSyncEnabled }
 
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
 
             PageScrollView {
-                VStack(spacing: 16) {
-                    // MARK: - Data Actions
-                    GlassSectionHeader("Data", icon: "externaldrive.fill")
+                VStack(alignment: .leading, spacing: AppLayout.listSpacing) {
+                    // Both rows open a confirmation, not a page, so neither
+                    // wears a chevron.
+                    GlassRowGroup(dividerInset: Self.dividerInset) {
+                        actionRow(
+                            "Reset settings",
+                            icon: "arrow.counterclockwise",
+                            caption: "Preferences go back to their defaults. Your takes and lists stay."
+                        ) {
+                            viewModel.showingResetConfirmation = true
+                        }
 
-                    GlassCard(padding: 14) {
-                        VStack(spacing: 0) {
-                            Button {
-                                Haptics.warning()
-                                viewModel.showingResetConfirmation = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "arrow.counterclockwise")
-                                        .font(.body)
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 28)
-                                    Text("Reset Settings")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 40)
-                            }
-                            .buttonStyle(.plain)
-
-                            Divider().padding(.vertical, 6)
-
-                            Button {
-                                Haptics.warning()
-                                viewModel.showingClearDataConfirmation = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "trash")
-                                        .font(.body)
-                                        .foregroundStyle(AppColors.error)
-                                        .frame(width: 28)
-                                    Text("Clear All Data")
-                                        .font(.subheadline)
-                                        .foregroundStyle(AppColors.error)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 40)
-                            }
-                            .buttonStyle(.plain)
+                        actionRow(
+                            "Clear all data",
+                            icon: "trash",
+                            caption: "Deletes everything you've recorded and written.",
+                            isDestructive: true
+                        ) {
+                            viewModel.showingClearDataConfirmation = true
                         }
                     }
 
-                    Text("Your recordings and progress are stored locally on this device.")
+                    if let outcome {
+                        Label(outcome.message, systemImage: outcome == .failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(outcome == .failed ? AppColors.error : AppColors.success)
+                            .padding(.horizontal, 4)
+                            .transition(.opacity)
+                    }
+
+                    Text(storageFooter)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 4)
                 }
                 .padding()
+                .labelStyle(.row)
             }
             .scrollIndicators(.hidden)
         }
         .navigationTitle("Data Management")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Reset Settings?", isPresented: $viewModel.showingResetConfirmation) {
+        .alert("Reset settings?", isPresented: $viewModel.showingResetConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) {
-                Task { await viewModel.resetSettings() }
+                Task {
+                    let didReset = await viewModel.resetSettings()
+                    finish(didReset ? .reset : .failed)
+                }
             }
         } message: {
-            Text("This will reset all settings to their default values.")
+            Text("Session, routine, analysis, prompt, word workout, look, and score weight preferences go back to their defaults, and reminders turn off. Your recordings, stories, word lists, custom fillers and questions, and voice profile stay.")
         }
-        .alert("Clear All Data?", isPresented: $viewModel.showingClearDataConfirmation) {
+        .alert("Clear all data?", isPresented: $viewModel.showingClearDataConfirmation) {
             TextField("Type \"I acknowledge\"", text: $viewModel.clearDataAcknowledgement)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -87,13 +87,75 @@ struct DataManagementView: View {
                 viewModel.clearDataAcknowledgement = ""
             }
             Button("Clear Data", role: .destructive) {
-                Task { await viewModel.clearAllData() }
                 viewModel.clearDataAcknowledgement = ""
+                Task {
+                    let didClear = await viewModel.clearAllData()
+                    finish(didClear ? .cleared : .failed)
+                }
             }
             .disabled(viewModel.clearDataAcknowledgement.trimmingCharacters(in: .whitespaces).lowercased() != "i acknowledge")
         } message: {
-            Text("This will permanently delete all your recordings, goals, achievements, and curriculum progress. Type \"I acknowledge\" to confirm.")
+            Text(clearMessage)
         }
     }
 
+    // MARK: - Copy
+
+    /// The exact scope of `SettingsViewModel.clearAllData()`.
+    private var clearMessage: String {
+        let reach = syncsWithICloud ? ", here and on every device that syncs with your iCloud" : ""
+        return "This permanently deletes your recordings, stories, custom prompts, word lists, custom fillers and questions, saved Read Aloud texts, voice profile, goals, achievements, lesson progress, and usage log\(reach). Your settings stay. Type \"I acknowledge\" to confirm."
+    }
+
+    private var storageFooter: String {
+        syncsWithICloud
+            ? "Your recordings and progress live on this device and in your private iCloud, so clearing them removes them from every synced device."
+            : "Your recordings and progress are stored only on this device."
+    }
+
+    // MARK: - Rows
+
+    /// Rules start under the row titles: 14pt row inset + the 24pt glyph
+    /// column + the 12pt gap of `RowLabelStyle`.
+    private static let dividerInset: CGFloat = 50
+
+    private func actionRow(
+        _ title: String,
+        icon: String,
+        caption: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            Haptics.warning()
+            action()
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(title, systemImage: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(isDestructive ? AppColors.error : .primary)
+
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 36)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RowPressStyle())
+    }
+
+    private func finish(_ result: Outcome) {
+        if result == .failed {
+            Haptics.error()
+        } else {
+            Haptics.success()
+        }
+        withAnimation(.easeInOut(duration: 0.2)) { outcome = result }
+        UIAccessibility.post(notification: .announcement, argument: result.message)
+    }
 }

@@ -131,6 +131,16 @@ final class Story {
     var resolvedEntryType: StoryEntryType {
         StoryEntryType(rawValue: entryType) ?? .story
     }
+
+    /// The take length practising this story starts with: the smallest
+    /// duration that fits the script at 150 wpm plus 15% for pauses, never
+    /// under a minute. Every story used to start at one minute, and a take
+    /// saves and stops at its limit by default, so a two-minute script was
+    /// cut halfway and scored on half its text.
+    var practiceDuration: RecordingDuration {
+        let needed = max(60, Double(estimatedDurationSeconds) * 1.15)
+        return RecordingDuration.allCases.first { Double($0.seconds) >= needed } ?? .tenMinutes
+    }
 }
 
 // MARK: - Entry Type
@@ -171,7 +181,7 @@ enum StoryStage: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .spark: return "Idea"
-        case .draft: return "In Progress"
+        case .draft: return "In progress"
         case .polished: return "Ready"
         }
     }

@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// The prepare screen before a take. It names what the take is about - the
+/// prompt card, or `prepTitle` when there is no prompt (a story, free talk, a
+/// drill) - and it attaches nothing the user did not choose: it used to hand
+/// every take to the first active goal, on a screen with no goal control.
 struct CountdownOverlayView: View {
     let prompt: Prompt?
     let duration: RecordingDuration
@@ -12,11 +16,7 @@ struct CountdownOverlayView: View {
     var prepSubtitle: String? = nil
     let onComplete: () -> Void
     let onCancel: () -> Void
-    @Binding var selectedGoalId: UUID?
     var challenge: SharedChallenge? = nil
-
-    @Query(filter: #Predicate<UserGoal> { !$0.isCompleted })
-    private var activeGoals: [UserGoal]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -53,7 +53,6 @@ struct CountdownOverlayView: View {
         backdrop: RecordingBackdrop = .base,
         prepTitle: String? = nil,
         prepSubtitle: String? = nil,
-        selectedGoalId: Binding<UUID?> = .constant(nil),
         challenge: SharedChallenge? = nil,
         onComplete: @escaping () -> Void,
         onCancel: @escaping () -> Void
@@ -66,7 +65,6 @@ struct CountdownOverlayView: View {
         self.backdrop = backdrop
         self.prepTitle = prepTitle
         self.prepSubtitle = prepSubtitle
-        self._selectedGoalId = selectedGoalId
         self.challenge = challenge
         self.onComplete = onComplete
         self.onCancel = onCancel
@@ -96,13 +94,7 @@ struct CountdownOverlayView: View {
                     }
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
-                    .background {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5)
-                            }
-                    }
+                    .glassEffect(.regular, in: .capsule)
                     .accessibilityElement(children: .combine)
                 }
 
@@ -139,7 +131,7 @@ struct CountdownOverlayView: View {
                     }
 
                     GlassButton(
-                        title: "Start Now",
+                        title: "Start now",
                         icon: "bolt.fill",
                         style: .primary,
                         size: .medium,
@@ -158,11 +150,6 @@ struct CountdownOverlayView: View {
             await runCountdown()
         }
         .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
-        .onAppear {
-            if selectedGoalId == nil, let firstGoal = activeGoals.first {
-                selectedGoalId = firstGoal.id
-            }
-        }
     }
 
     // MARK: - Countdown loop
@@ -227,22 +214,25 @@ struct CountdownOverlayView: View {
                         .frame(maxWidth: .infinity)
                 }
 
-                HStack {
-                    Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.9))
+                // Category · difficulty as one eyebrow, the grammar of the
+                // Today card and the Library rows. Difficulty was a filled
+                // capsule here, the one place it still was.
+                HStack(alignment: .center, spacing: 8) {
+                    let category = PromptCategory(rawValue: prompt.category)
 
-                    Spacer()
+                    HStack(spacing: 5) {
+                        Image(systemName: category?.iconName ?? "text.bubble")
+                        Text(category?.shortName ?? prompt.category)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        Text("·")
+                        Text(prompt.difficulty.displayName)
+                            .foregroundStyle(prompt.difficulty.color)
+                    }
+                    .eyebrowStyle(category?.color ?? AppColors.accent)
+                    .layoutPriority(-1)
 
-                    Text(prompt.difficulty.displayName)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background {
-                            Capsule()
-                                .fill(AppColors.difficultyColor(prompt.difficulty).opacity(0.3))
-                        }
-                        .foregroundStyle(AppColors.difficultyColor(prompt.difficulty))
+                    Spacer(minLength: 8)
 
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
@@ -252,10 +242,10 @@ struct CountdownOverlayView: View {
                     .foregroundStyle(.white.opacity(0.8))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background {
-                        Capsule()
-                            .fill(.white.opacity(0.1))
-                    }
+                    // Painted, not glass: it sits on the card's glass.
+                    .background { Capsule().fill(Color.white.opacity(0.10)) }
+                    .overlay { Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
+                    .fixedSize()
                 }
 
                 Text(prompt.text)

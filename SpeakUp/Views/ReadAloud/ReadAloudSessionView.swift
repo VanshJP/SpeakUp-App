@@ -54,6 +54,18 @@ struct ReadAloudSessionView: View {
                         .padding(.vertical, 24)
                     }
                     .onChange(of: viewModel.currentWordIndex) { _, newIndex in
+                        // A retry or a drill drops back to word 0: jump to
+                        // the top whatever the last nudge was. Resetting the
+                        // marker before the index fell made the guard below
+                        // swallow this scroll, so a retry opened on the end of
+                        // a long passage with the mic already live.
+                        if newIndex == 0 {
+                            lastAutoScrolledWordIndex = 0
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo("word_0", anchor: .top)
+                            }
+                            return
+                        }
                         // Re-centring every second word meant the passage slid
                         // under the reader continuously - the other half of
                         // "the words keep moving". One nudge per line's worth
@@ -104,7 +116,6 @@ struct ReadAloudSessionView: View {
         .fullScreenCover(item: $finishedRead) { result in
             ReadAloudResultView(result: result, onRetry: {
                 finishedRead = nil
-                lastAutoScrolledWordIndex = 0
                 Task { await viewModel.retryPassage() }
             }, onDone: {
                 finishedRead = nil
@@ -113,15 +124,20 @@ struct ReadAloudSessionView: View {
             }, onPractice: { drill in
                 finishedRead = nil
                 drilledPassage = drill
-                lastAutoScrolledWordIndex = 0
                 Task { await viewModel.startSession(passage: drill) }
-            })
+            }, onReadFullPassage: readFullPassage)
         }
         .sheet(item: $selectedWord) { detail in
+            // Mid-read, the word plays under the same hold as "Hear it". The
+            // sheet used to say "Stop session to hear pronunciation", and
+            // stopping scored the read - on a minimal pair, hearing the word
+            // is the whole point.
             WordDetailSheet(
                 detail: detail,
                 pronunciationService: pronunciationService,
-                micActive: viewModel.isMicOpen
+                onHear: {
+                    playModel { pronunciationService.speak(word: detail.word) }
+                }
             )
         }
         .alert(
@@ -141,12 +157,17 @@ struct ReadAloudSessionView: View {
                         UIApplication.shared.open(url)
                     }
                 }
+            } else {
+                // Same passage, no trip back to the list.
+                Button("Try Again") {
+                    Task { await viewModel.retryPassage() }
+                }
             }
         } message: {
             Text(
                 readAloudErrorNeedsSettings
                     ? "Check microphone and Speech Recognition access, then try again when you're ready."
-                    : "Read Aloud couldn't start this time. Close this screen and try again when you're ready."
+                    : "Read Aloud couldn't start this time. Try again, or close and come back when you're ready."
             )
         }
     }
@@ -155,12 +176,35 @@ struct ReadAloudSessionView: View {
         viewModel.errorMessage?.localizedCaseInsensitiveContains("settings") == true
     }
 
+    /// Only a drill's result offers it: back to the passage the drill came
+    /// from, to check the fix where it has to hold.
+    private var readFullPassage: (() -> Void)? {
+        guard drilledPassage != nil else { return nil }
+        return {
+            finishedRead = nil
+            drilledPassage = nil
+            Task { await viewModel.startSession(passage: passage) }
+        }
+    }
+
+    /// Plays a model line with the read held: the mic goes down first, so the
+    /// recogniser cannot score the synthesiser, and `onChange(of: isSpeaking)`
+    /// brings it back on the same transcript when the line ends.
+    private func playModel(_ play: () -> Void) {
+        viewModel.pauseForModel()
+        play()
+        // Nothing to wait for if the synthesiser declined the text.
+        if !pronunciationService.isSpeaking {
+            viewModel.resumeAfterModel()
+        }
+    }
+
     // MARK: - Top Bar
 
     private var topBar: some View {
         HStack {
             Button {
-                Haptics.warning()
+                Haptics.light()
                 if viewModel.sessionState == .listening {
                     showingExitConfirm = true
                 } else {
@@ -169,14 +213,14 @@ struct ReadAloudSessionView: View {
                     dismiss()
                 }
             } label: {
+                // The runner ✕ the warm-up and confidence screens wear.
                 Image(systemName: "xmark")
-                    .font(.title2.weight(.semibold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .background {
-                        Circle().fill(.ultraThinMaterial)
-                    }
+                    .glassCircle()
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("End session")
             .confirmationDialog(
                 "End this session?",
@@ -205,14 +249,12 @@ struct ReadAloudSessionView: View {
                     .frame(width: 8, height: 8)
                     .accessibilityHidden(true)
                 Text("\(Int(viewModel.accuracyPercentage))%")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.statValue)
                     .foregroundStyle(.white)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background {
-                Capsule().fill(.ultraThinMaterial)
-            }
+            .glassEffect(.regular, in: .capsule)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Accuracy \(Int(viewModel.accuracyPercentage)) percent")
         }
@@ -222,28 +264,14 @@ struct ReadAloudSessionView: View {
 
     // MARK: - Progress Bar
 
+    /// The app's determinate meter. A `Canvas` reads the fraction, so it is
+    /// not animated (gotcha §28) - it steps a tick at a time.
     private var progressBar: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.white.opacity(0.1))
-
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.primary, AppColors.categoryBrandBright],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: geometry.size.width * viewModel.progressPercentage)
-                    .animation(.easeInOut(duration: 0.3), value: viewModel.progressPercentage)
-            }
-        }
-        .frame(height: 6)
-        .accessibilityElement()
-        .accessibilityLabel("Passage progress")
-        .accessibilityValue("\(Int(viewModel.progressPercentage * 100)) percent")
+        TickMeter(fraction: viewModel.progressPercentage, color: AppColors.primary)
+            .frame(height: 10)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Passage progress")
+            .accessibilityValue("\(Int(viewModel.progressPercentage * 100)) percent")
     }
 
     private var accuracyColor: Color {
@@ -267,6 +295,10 @@ struct ReadAloudSessionView: View {
     /// Never disabled while the model plays: that is exactly when someone
     /// reaches for it, and the only way past the voiceover used to be sitting
     /// through it. While speaking it reads Stop.
+    ///
+    /// It plays from the start of the sentence the reader is in, not from the
+    /// top: someone who fumbled line five used to sit through lines one to
+    /// four first. Before the first word that is the whole passage.
     private var hearItButton: some View {
         let isSpeaking = pronunciationService.isSpeaking
 
@@ -281,18 +313,14 @@ struct ReadAloudSessionView: View {
             if isSpeaking {
                 pronunciationService.stop()
             } else {
-                viewModel.pauseForModel()
-                pronunciationService.speak(text: currentPassage.text, rate: 0.42)
-                // Nothing to wait for if the synthesiser declined the text.
-                if !pronunciationService.isSpeaking {
-                    viewModel.resumeAfterModel()
-                }
+                let line = Self.modelLine(in: currentPassage.words, from: viewModel.currentWordIndex)
+                playModel { pronunciationService.speak(text: line, rate: 0.42) }
             }
         }
         .accessibilityLabel(
             isSpeaking
                 ? "Stop the model reading and go back to the mic"
-                : "Hear the passage read aloud. Your reading is held until it finishes."
+                : "Hear the passage from this sentence. Your reading is held until it finishes."
         )
     }
 
@@ -356,10 +384,12 @@ struct ReadAloudSessionView: View {
 
                 Spacer(minLength: 8)
 
+                // One white button at a time: while the mic is stalled,
+                // Resume reading is the primary and Done steps back.
                 GlassButton(
                     title: "Done",
                     icon: "stop.fill",
-                    style: .primary,
+                    style: viewModel.isStalled ? .secondary : .primary,
                     size: .medium
                 ) {
                     Haptics.medium()
@@ -370,6 +400,30 @@ struct ReadAloudSessionView: View {
                 .opacity(viewModel.isListening ? 1 : 0.5)
             }
         }
+    }
+}
+
+// MARK: - Model Line
+
+extension ReadAloudSessionView {
+    /// The passage from the start of the sentence holding `index` to the end.
+    /// "Hear it" plays this; Stop hands the mic back whenever the reader has
+    /// heard enough. An abbreviation reads as a sentence end, which only
+    /// starts the line a few words late.
+    static func modelLine(in words: [String], from index: Int) -> String {
+        guard !words.isEmpty else { return "" }
+        var start = min(max(index, 0), words.count - 1)
+        while start > 0, !endsSentence(words[start - 1]) {
+            start -= 1
+        }
+        return words[start...].joined(separator: " ")
+    }
+
+    private static func endsSentence(_ word: String) -> Bool {
+        // Closing quotes and brackets sit outside the full stop: `end."`
+        let closers = CharacterSet(charactersIn: "\"')]\u{201D}\u{2019}")
+        guard let last = word.trimmingCharacters(in: closers).last else { return false }
+        return ".!?\u{2026}".contains(last)
     }
 }
 
@@ -385,13 +439,11 @@ private struct ReadAloudClock: View {
         let elapsed = viewModel.formattedElapsedTime
 
         Text(elapsed)
-            .font(.system(size: 18, weight: .semibold, design: .monospaced))
+            .font(.statValue)
             .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background {
-                Capsule().fill(.ultraThinMaterial)
-            }
+            .glassEffect(.regular, in: .capsule)
             .accessibilityLabel("Elapsed \(elapsed)")
     }
 }
@@ -438,6 +490,9 @@ private struct ReadAloudPassageText: View {
                         selectedWord = WordDetail(word: word, index: index, state: state)
                     }
                     .accessibilityLabel(wordLabel(word, state: state))
+                    // A read word opens its sheet, so VoiceOver says so.
+                    .accessibilityAddTraits(state.isSettled ? .isButton : [])
+                    .accessibilityHidden(state == .upcoming)
                     .id("word_\(index)")
             }
         }

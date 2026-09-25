@@ -26,10 +26,12 @@ class StoriesViewModel {
     /// Selected folder scope. `nil` = All Notes. Pinned pseudo-folder uses `folderSelection`.
     var folderSelection: FolderSelection = .all
 
+    /// Filters only. A sort order narrows nothing, so it neither lights the
+    /// filter button nor resets with Clear Filters.
     var hasActiveFilters: Bool {
         selectedTagFilter != nil || selectedTagValue != nil ||
         selectedStageFilter != nil || dateFilterStart != nil ||
-        favoritesOnly || sortOrder != .updatedAt ||
+        favoritesOnly ||
         selectedEntryTypeFilter != nil ||
         folderSelection != .all
     }
@@ -106,7 +108,7 @@ class StoriesViewModel {
             loadedFingerprint = StoreFingerprint(
                 storyCount: stories.count,
                 newestStoryUpdate: stories.first?.updatedAt,
-                folders: folders.map(StoreFingerprint.folderKey)
+                folders: folders.map { StoreFingerprint.folderKey($0) }
             )
             if stories.isEmpty, folderSelection != .all {
                 folderSelection = .all
@@ -395,7 +397,6 @@ class StoriesViewModel {
         dateFilterStart = nil
         dateFilterEnd = nil
         favoritesOnly = false
-        sortOrder = .updatedAt
         selectedEntryTypeFilter = nil
         folderSelection = .all
         recomputeFilteredStories()
@@ -410,6 +411,16 @@ class StoriesViewModel {
             dateFilterStart = calendar.date(byAdding: .month, value: -1, to: parsed) ?? parsed
             dateFilterEnd = calendar.date(byAdding: .month, value: 1, to: parsed) ?? parsed
         }
+        recomputeFilteredStories()
+    }
+
+    /// Undoes `applyTagFilter` only - folder scope and sort stay put. The
+    /// folder bar's tag chip calls it.
+    func clearTagFilter() {
+        selectedTagFilter = nil
+        selectedTagValue = nil
+        dateFilterStart = nil
+        dateFilterEnd = nil
         recomputeFilteredStories()
     }
 
@@ -565,14 +576,6 @@ class StoriesViewModel {
         }
     }
 
-    /// Delete a story only if it has no meaningful content (used for empty draft cleanup).
-    func deleteIfEmpty(_ story: Story) {
-        let trimmedTitle = story.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedContent = story.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedTitle.isEmpty && trimmedContent.isEmpty else { return }
-        deleteStory(story)
-    }
-
     func toggleFavorite(_ story: Story) {
         guard let context = modelContext else { return }
 
@@ -677,7 +680,7 @@ private struct StoreFingerprint: Equatable {
         return StoreFingerprint(
             storyCount: try context.fetchCount(FetchDescriptor<Story>()),
             newestStoryUpdate: try context.fetch(newest).first?.updatedAt,
-            folders: try context.fetch(folderDescriptor).map(folderKey)
+            folders: try context.fetch(folderDescriptor).map { folderKey($0) }
         )
     }
 }

@@ -15,9 +15,9 @@ struct LessonCompletionView: View {
     }
 
     var body: some View {
+        // No canvas of its own: `LessonDetailView` paints it, and a second one
+        // here stacked another full-screen pass under the same pixels.
         ZStack {
-            AppBackground()
-
             PageScrollView {
                 VStack(spacing: 24) {
                     Spacer().frame(height: 40)
@@ -43,21 +43,16 @@ struct LessonCompletionView: View {
                     }
                     .introReveal(delay: .milliseconds(300))
 
-                    GlassCard(tint: identity.accent.opacity(0.08)) {
+                    // The objective only. The roadmap line under it ("We'll learn,
+                    // then practice") was future tense on a finished lesson and
+                    // repeated the list below.
+                    GlassCard(tint: identity.accent.opacity(0.06)) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("You can now")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(identity.accent)
-                                .textCase(.uppercase)
-                                .tracking(0.4)
+                                .eyebrowStyle(identity.accent)
 
                             Text(lesson.objective)
                                 .font(.headline)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Text(LessonTeachingCopy.roadmap(for: lesson))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -66,34 +61,37 @@ struct LessonCompletionView: View {
 
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("What you worked")
-                                .font(.subheadline.weight(.semibold))
+                            GlassCardTitle("What you worked")
 
-                            ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
-                                HStack(spacing: 10) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.subheadline)
-                                        .foregroundStyle(AppColors.success)
+                            // A grid, not a fixed 72pt role column: the column
+                            // takes its widest label, so "3. Warm-up" is never
+                            // clipped at large text sizes.
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 12) {
+                                ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
+                                    GridRow(alignment: .firstTextBaseline) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.subheadline)
+                                            .foregroundStyle(AppColors.success)
 
-                                    Text("\(index + 1). \(activity.type.teacherRole)")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(activity.type.teacherColor)
-                                        .frame(width: 72, alignment: .leading)
+                                        Text("\(index + 1). \(activity.type.teacherRole)")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(activity.type.teacherColor)
 
-                                    Text(activity.title)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-
-                                    Spacer(minLength: 0)
+                                        Text(activity.title)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .introReveal(delay: .milliseconds(300))
 
                     if let nextLesson {
                         let nextIdentity = LessonIdentity.forLesson(id: nextLesson.id)
-                        GlassCard(tint: nextIdentity.accent.opacity(0.08)) {
+                        GlassCard(tint: nextIdentity.accent.opacity(0.06)) {
                             HStack(alignment: .top, spacing: 12) {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -105,8 +103,7 @@ struct LessonCompletionView: View {
 
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Up next")
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(nextIdentity.accent)
+                                        .eyebrowStyle(nextIdentity.accent)
 
                                     Text(nextLesson.title)
                                         .font(.headline)
@@ -130,7 +127,7 @@ struct LessonCompletionView: View {
                             }
                         }
 
-                        GlassButton(title: "Back to path", style: .secondary, fullWidth: true) {
+                        GlassButton(title: "Back to Learn", style: .secondary, fullWidth: true) {
                             Haptics.light()
                             onBackToCurriculum()
                         }

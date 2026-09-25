@@ -3,7 +3,9 @@ import SwiftUI
 /// Inline coach note - Today and session-detail surfaces.
 ///
 /// Same grammar as `FriendChallengeCard`: glass, one eyebrow, one body, one
-/// capsule CTA, easy dismiss. Never competes with Start speaking.
+/// capsule CTA, easy dismiss. Never competes with Start speaking: on Today the
+/// CTA is secondary. On the detail screen the note replaces `NextStepCard`, so
+/// it is that screen's one action and keeps the white primary.
 struct CoachMomentCard: View {
     let moment: CoachMoment
     let onAccept: () -> Void
@@ -35,7 +37,7 @@ struct CoachMomentCard: View {
                     Spacer(minLength: 0)
                     GlassButton(
                         title: moment.actionTitle,
-                        style: .primary,
+                        style: moment.surface == .today ? .secondary : .primary,
                         size: .small
                     ) {
                         Haptics.medium()
@@ -82,56 +84,58 @@ struct CoachMomentOverlay: View {
             ConfettiView(origin: UnitPoint(x: 0.5, y: 0.3))
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(AppColors.primary)
-                    .symbolEffect(.bounce, value: reduceMotion ? false : showContent)
-
-                VStack(spacing: 8) {
-                    Text("Coach note")
-                        .font(.caption.weight(.semibold))
+            // Glass plate, not a material one. Only the content fades in: a
+            // glass surface animated on through opacity samples its backdrop
+            // wrong mid-fade and shows as a dark slab, so the plate only scales.
+            GlassCard(cornerRadius: 24, padding: 28, elevated: true) {
+                VStack(spacing: 24) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 56))
                         .foregroundStyle(AppColors.primary)
-                        .textCase(.uppercase)
-                        .tracking(1.5)
+                        .symbolEffect(.bounce, value: reduceMotion ? false : showContent)
 
-                    Text(moment.title)
-                        .font(.title.weight(.bold))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .accessibilityFocused($titleFocused)
+                    VStack(spacing: 8) {
+                        Text("Coach note")
+                            .eyebrowStyle(AppColors.primary)
 
-                    Text(moment.body)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 8)
+                        Text(moment.title)
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .accessibilityFocused($titleFocused)
+
+                        Text(moment.body)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 8)
+                    }
+
+                    GlassButton(
+                        title: moment.actionTitle,
+                        style: .primary,
+                        fullWidth: true
+                    ) {
+                        Haptics.medium()
+                        onAccept()
+                    }
+
+                    Button {
+                        Haptics.light()
+                        onDismiss()
+                    } label: {
+                        Text("Not now")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(GlassPressStyle())
                 }
-
-                GlassButton(
-                    title: moment.actionTitle,
-                    style: .primary,
-                    fullWidth: true
-                ) {
-                    Haptics.medium()
-                    onAccept()
-                }
-
-                Button("Not now") {
-                    Haptics.light()
-                    onDismiss()
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.6))
-            }
-            .padding(28)
-            .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                .opacity(showContent ? 1 : 0)
             }
             .padding(.horizontal, 28)
             .scaleEffect(showContent ? 1 : 0.92)
-            .opacity(showContent ? 1 : 0)
         }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)

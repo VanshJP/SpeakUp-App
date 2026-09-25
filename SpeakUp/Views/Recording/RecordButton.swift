@@ -27,7 +27,9 @@ struct RecordButton: View {
         } onRelease: {
             isPressing = false
         }
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: isRecording)
+        // No haptic of its own: every host's start and stop already buzzes
+        // (`RecordingViewModel.startRecording` / `stopRecording`), and a
+        // second one here made each press feel like two.
     }
 
     // MARK: - Shell
@@ -36,12 +38,11 @@ struct RecordButton: View {
     private var shell: some View {
         switch style {
         case .classic:
-            Circle()
-                .fill(.ultraThinMaterial)
+            // Liquid Glass, which lights its own edge - no material fill and
+            // no painted rim on top of it (ui-design-system rule 13).
+            Color.clear
                 .frame(width: buttonSize, height: buttonSize)
-                .overlay {
-                    Circle().strokeBorder(.white.opacity(0.3), lineWidth: 2)
-                }
+                .glassEffect(.regular, in: .circle)
 
         case .ring:
             Circle()

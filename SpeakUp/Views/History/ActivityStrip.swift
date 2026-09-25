@@ -1,6 +1,9 @@
 import SwiftUI
 
 /// About four months of practice as a dot grid, with a switchable metric.
+/// Tap a day and the footer reads it; tap it again to go back to the total.
+/// A tap, not a drag: the grid is tall enough that a drag would catch the
+/// scroll.
 ///
 /// Derived entirely from the `RecordingSummary` array History already holds, so
 /// it costs no extra fetch and never touches a `Recording` blob.
@@ -8,6 +11,8 @@ struct ActivityStrip: View {
     let summaries: [RecordingSummary]
 
     @State private var metric: ActivityMetric = .sessions
+    @State private var inspected: Date?
+    @State private var gridWidth: CGFloat = 0
 
     private static let weeksShown = 17
     private static let spacing: CGFloat = 3
@@ -29,6 +34,10 @@ struct ActivityStrip: View {
                         .frame(maxWidth: .infinity)
                     }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
+                .contentShape(Rectangle())
+                .onTapGesture(coordinateSpace: .local, perform: inspect)
+                .sensoryFeedback(.selection, trigger: inspected)
 
                 footer(buckets)
             }
@@ -75,9 +84,10 @@ struct ActivityStrip: View {
 
     private func footer(_ buckets: [Date: DayBucket]) -> some View {
         HStack(spacing: 8) {
-            Text(metric.caption(for: buckets))
+            Text(inspected.map { dayCaption($0, bucket: buckets[$0]) } ?? metric.caption(for: buckets))
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(inspected == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.white))
+                .contentTransition(.opacity)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -111,7 +121,10 @@ struct ActivityStrip: View {
             .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .overlay {
-                if Calendar.current.isDateInToday(day) {
+                if day == inspected {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(Color.white.opacity(0.95), lineWidth: 1.5)
+                } else if Calendar.current.isDateInToday(day) {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .stroke(Color.white.opacity(0.5), lineWidth: 1)
                 }
@@ -129,6 +142,30 @@ struct ActivityStrip: View {
             guard let average = bucket.averageScore else { return "\(dateText), no score" }
             return "\(dateText), average score \(average)"
         }
+    }
+
+    // MARK: - Inspecting a Day
+
+    /// The day under a tap, from the grid's own geometry: every column is
+    /// one week and every cell is square, so a point maps to one date.
+    private func inspect(at location: CGPoint) {
+        let cell = (gridWidth - Self.spacing * CGFloat(Self.weeksShown - 1)) / CGFloat(Self.weeksShown)
+        guard cell > 0 else { return }
+        let weeks = self.weeks
+        let column = Int(location.x / (cell + Self.spacing))
+        let row = Int(location.y / (cell + Self.spacing))
+        guard weeks.indices.contains(column), weeks[column].indices.contains(row) else { return }
+        let day = weeks[column][row]
+        guard day <= .now else { return }
+        inspected = inspected == day ? nil : day
+    }
+
+    private func dayCaption(_ day: Date, bucket: DayBucket?) -> String {
+        let date = day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        guard let bucket, bucket.count > 0 else { return "\(date) · no practice" }
+        let sessions = "\(bucket.count) session\(bucket.count == 1 ? "" : "s")"
+        guard let average = bucket.averageScore else { return "\(date) · \(sessions)" }
+        return "\(date) · \(sessions) · avg \(average)"
     }
 
     // MARK: - Derived Data

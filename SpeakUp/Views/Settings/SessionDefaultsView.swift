@@ -8,109 +8,90 @@ struct SessionDefaultsView: View {
             AppBackground(style: .subtle)
 
             PageScrollView {
-                VStack(spacing: 20) {
-                    GlassCard {
-                        VStack(spacing: 0) {
-                            settingsRow(icon: "person.fill", title: "Speaker Level") {
-                                Picker("", selection: $viewModel.speakerLevel) {
-                                    ForEach(SpeakerLevel.allCases) { level in
-                                        Text(level.displayName).tag(level)
-                                    }
+                VStack(spacing: AppLayout.chapterSpacing) {
+                    // Each row explains itself. The paragraph under the card
+                    // that used to cover five rows at once is gone.
+                    GlassRowGroup(dividerInset: Self.dividerInset) {
+                        pickerRow(
+                            "Speaker level",
+                            icon: "person.fill",
+                            selection: $viewModel.speakerLevel,
+                            caption: viewModel.speakerLevel.subtitle
+                        ) {
+                            ForEach(SpeakerLevel.allCases) { level in
+                                Text(level.displayName).tag(level)
+                            }
+                        }
+
+                        pickerRow("Default duration", icon: "clock", selection: $viewModel.defaultDuration) {
+                            ForEach(RecordingDuration.allCases) { duration in
+                                Text(duration.displayName).tag(duration)
+                            }
+                        }
+
+                        pickerRow(
+                            "Countdown timer",
+                            icon: "timer",
+                            selection: $viewModel.countdownDuration,
+                            caption: "Time to get ready before recording starts."
+                        ) {
+                            ForEach(CountdownDuration.allCases) { duration in
+                                Text(duration.displayName).tag(duration)
+                            }
+                        }
+
+                        pickerRow(
+                            "When timer ends",
+                            icon: "flag.checkered",
+                            selection: $viewModel.timerEndBehavior,
+                            caption: viewModel.timerEndBehavior.description
+                        ) {
+                            ForEach(TimerEndBehavior.allCases) { behavior in
+                                Text(behavior.displayName).tag(behavior)
+                            }
+                        }
+
+                        toggleRow(
+                            "Haptic coaching",
+                            icon: "hand.tap",
+                            isOn: $viewModel.hapticCoachingEnabled,
+                            caption: "Gentle taps for long silences, fillers, or pace changes."
+                        )
+
+                        toggleRow(
+                            "Audio cues",
+                            icon: "speaker.wave.2",
+                            isOn: $viewModel.chirpSoundEnabled,
+                            caption: "Short chirps during warm-ups and drills."
+                        )
+
+                        // Hidden rather than greyed out while cues are off: a
+                        // disabled picker only invites the tap that cannot land.
+                        if viewModel.chirpSoundEnabled {
+                            pickerRow("Cue sound", icon: "music.quarternote.3", selection: $viewModel.soundPack) {
+                                ForEach(SoundPack.allCases) { pack in
+                                    Text(pack.displayName).tag(pack)
                                 }
-                                .pickerStyle(.menu)
-                                .tint(AppColors.primary)
                             }
+                        }
 
-                            divider
-
-                            settingsRow(icon: "clock", title: "Default Duration") {
-                                Picker("", selection: $viewModel.defaultDuration) {
-                                    ForEach(RecordingDuration.allCases) { duration in
-                                        Text(duration.displayName).tag(duration)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(AppColors.primary)
-                            }
-
-                            divider
-
-                            settingsRow(icon: "timer", title: "Countdown Timer") {
-                                Picker("", selection: $viewModel.countdownDuration) {
-                                    ForEach(CountdownDuration.allCases) { duration in
-                                        Text(duration.displayName).tag(duration)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(AppColors.primary)
-                            }
-
-
-                            divider
-
-                            settingsRow(icon: "flag.checkered", title: "When Timer Ends") {
-                                Picker("", selection: $viewModel.timerEndBehavior) {
-                                    ForEach(TimerEndBehavior.allCases) { behavior in
-                                        Text(behavior.displayName).tag(behavior)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(AppColors.primary)
-                            }
-
-                            divider
-
-                            Toggle(isOn: $viewModel.hapticCoachingEnabled) {
-                                Label("Haptic Coaching", systemImage: "hand.tap")
-                                    .font(.subheadline)
-                            }
-                            .tint(AppColors.primary)
-                            .frame(minHeight: 40)
-
-                            divider
-
-                            Toggle(isOn: $viewModel.chirpSoundEnabled) {
-                                Label("Audio Cues", systemImage: "speaker.wave.2")
-                                    .font(.subheadline)
-                            }
-                            .tint(AppColors.primary)
-                            .frame(minHeight: 40)
-
-                            divider
-
-                            settingsRow(icon: "music.quarternote.3", title: "Cue Sound") {
-                                Picker("", selection: $viewModel.soundPack) {
-                                    ForEach(SoundPack.allCases) { pack in
-                                        Text(pack.displayName).tag(pack)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(AppColors.primary)
-                                .disabled(!viewModel.chirpSoundEnabled)
-                            }
-
-                            divider
-
+                        row {
                             Stepper(value: $viewModel.weeklyGoalSessions, in: 1...14) {
                                 HStack {
-                                    Label("Weekly Goal", systemImage: "target")
+                                    Label("Weekly goal", systemImage: "target")
                                         .font(.subheadline)
-                                    Spacer()
-                                    Text("\(viewModel.weeklyGoalSessions) sessions")
+                                    Spacer(minLength: 8)
+                                    Text(weeklyGoalText)
                                         .font(.subheadline)
+                                        .monospacedDigit()
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(minHeight: 40)
                         }
                     }
-
-                    Text("Speaker level controls your daily prompt difficulty mix. Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills, and Cue Sound picks their timbre.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
                 }
                 .padding()
+                .labelStyle(.row)
             }
             .scrollIndicators(.hidden)
         }
@@ -119,20 +100,77 @@ struct SessionDefaultsView: View {
         .modifier(SessionDefaultsChangeModifiers(viewModel: viewModel))
     }
 
-    // MARK: - Helpers
+    // MARK: - Rows
 
-    private var divider: some View {
-        Divider().padding(.vertical, 8)
+    /// Rules start under the row titles: 14pt row inset + the 24pt glyph
+    /// column + the 12pt gap of `RowLabelStyle`.
+    private static let dividerInset: CGFloat = 50
+    private static let captionIndent: CGFloat = 36
+
+    private var weeklyGoalText: String {
+        let sessions = viewModel.weeklyGoalSessions
+        return sessions == 1 ? "1 session" : "\(sessions) sessions"
     }
 
-    private func settingsRow<Content: View>(icon: String, title: String, @ViewBuilder trailing: () -> Content) -> some View {
-        HStack {
-            Label(title, systemImage: icon)
-                .font(.subheadline)
-            Spacer()
-            trailing()
+    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            content()
         }
-        .frame(minHeight: 40)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
+    }
+
+    /// The picker carries the row's name and caption for VoiceOver, so the
+    /// visible label is not read twice.
+    private func pickerRow<Value: Hashable, Options: View>(
+        _ title: String,
+        icon: String,
+        selection: Binding<Value>,
+        caption: String? = nil,
+        @ViewBuilder options: () -> Options
+    ) -> some View {
+        row {
+            HStack {
+                Label(title, systemImage: icon)
+                    .font(.subheadline)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 8)
+                Picker(title, selection: selection) {
+                    options()
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(AppColors.primary)
+                .accessibilityHint(caption ?? "")
+            }
+
+            if let caption {
+                captionText(caption)
+            }
+        }
+    }
+
+    private func toggleRow(_ title: String, icon: String, isOn: Binding<Bool>, caption: String) -> some View {
+        row {
+            Toggle(isOn: isOn) {
+                Label(title, systemImage: icon)
+                    .font(.subheadline)
+            }
+            .tint(AppColors.primary)
+            .accessibilityHint(caption)
+
+            captionText(caption)
+        }
+    }
+
+    private func captionText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, Self.captionIndent)
+            .accessibilityHidden(true)
     }
 }
 

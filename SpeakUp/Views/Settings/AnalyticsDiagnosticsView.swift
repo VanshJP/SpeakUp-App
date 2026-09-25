@@ -11,8 +11,9 @@ struct AnalyticsDiagnosticsView: View {
     private var analytics: AnalyticsService { AnalyticsService.shared }
 
     @State private var showingResetAlert = false
+    /// Written when the page appears, so Export is a `ShareLink` straight to
+    /// the share sheet. It used to open a sheet holding a second Export button.
     @State private var exportURL: URL?
-    @State private var showingShare = false
 
     var body: some View {
         ZStack {
@@ -37,21 +38,18 @@ struct AnalyticsDiagnosticsView: View {
         .navigationBarTitleDisplayMode(.inline)
         // The service keeps only this launch's events in memory; the stored
         // log is read here, where it is shown.
-        .onAppear { analytics.refreshRecentEvents() }
+        .onAppear {
+            analytics.refreshRecentEvents()
+            prepareExport()
+        }
         .alert("Clear diagnostics?", isPresented: $showingResetAlert) {
-            Button("Clear", role: .destructive) { analytics.reset() }
+            Button("Clear", role: .destructive) {
+                analytics.reset()
+                prepareExport()
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Deletes the on-device event log. Your recordings and scores are not affected.")
-        }
-        .sheet(isPresented: $showingShare) {
-            if let exportURL {
-                ShareLink(item: exportURL) {
-                    Label("Export events", systemImage: "square.and.arrow.up")
-                }
-                .padding()
-                .presentationDetents([.height(160)])
-            }
         }
     }
 
@@ -60,10 +58,8 @@ struct AnalyticsDiagnosticsView: View {
     private var disclosureCard: some View {
         GlassCard(padding: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Stays on this device", systemImage: "iphone")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text("Big Talk records coarse events, that a session finished, roughly how long it took, which screen led where. No audio, no transcripts, no exact scores, no identifiers. Nothing is sent anywhere.")
+                GlassCardTitle("Stays on this device")
+                Text("Big Talk records coarse events: that a session finished, roughly how long it took, which screen led where. No audio, no transcripts, no exact scores, no identifiers. Nothing is sent anywhere.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -76,9 +72,7 @@ struct AnalyticsDiagnosticsView: View {
         let card = analytics.scorecard()
         return GlassCard(padding: 14) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Scorecard")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                GlassCardTitle("Scorecard")
 
                 metricRow("Sessions started", value: "\(card.practiceStarts)")
                 metricRow("Analyses completed", value: "\(card.analysesCompleted)")
@@ -144,21 +138,21 @@ struct AnalyticsDiagnosticsView: View {
 
     private var trialStateSummary: String {
         switch EntitlementStore.shared.trialState {
-        case .notStarted: return "Not started, begins at the first scored analysis."
+        case .notStarted: return "Not started. Begins at the first scored analysis."
         case .active(let endsOn): return "Active · \(PracticeTrial.daysRemaining(until: endsOn)) days left."
-        case .expired: return "Expired, three analyses per 30 days."
+        case .expired: return "Expired. Three analyses per 30 days."
         }
     }
     #endif
 
     private func percentSummary(_ rate: Double?) -> String {
-        guard let rate else { return "," }
+        guard let rate else { return "–" }
         return "\(Int((rate * 100).rounded()))%"
     }
 
     private func timeToValueSummary(_ card: AnalyticsScorecard) -> String {
         guard let bucket = card.timeToValueBuckets.max(by: { $0.value < $1.value })?.key else {
-            return ","
+            return "–"
         }
         return bucket
     }
@@ -166,9 +160,7 @@ struct AnalyticsDiagnosticsView: View {
     private var recentEventsCard: some View {
         GlassCard(padding: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Recent events")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                GlassCardTitle("Recent events")
 
                 if analytics.recentEvents.isEmpty {
                     Text("Nothing recorded yet.")
@@ -204,9 +196,11 @@ struct AnalyticsDiagnosticsView: View {
 
     private var actions: some View {
         VStack(spacing: 10) {
-            GlassButton(title: "Export events", icon: "square.and.arrow.up", style: .secondary, fullWidth: true) {
-                Haptics.light()
-                export()
+            if let exportURL {
+                ShareLink(item: exportURL) {
+                    GlassButtonLabel(title: "Export events", icon: "square.and.arrow.up", style: .secondary, fullWidth: true)
+                }
+                .buttonStyle(GlassPressStyle())
             }
             GlassButton(title: "Clear diagnostics", icon: "trash", style: .outline, fullWidth: true) {
                 Haptics.warning()
@@ -223,18 +217,21 @@ struct AnalyticsDiagnosticsView: View {
             Spacer()
             Text(value)
                 .font(.caption.weight(.semibold))
+                .monospacedDigit()
                 .foregroundStyle(.white)
         }
     }
 
-    private func export() {
-        guard let data = analytics.exportJSON() else { return }
+    private func prepareExport() {
+        guard let data = analytics.exportJSON() else {
+            exportURL = nil
+            return
+        }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("bigtalk-diagnostics.json")
         do {
             try data.write(to: url, options: .atomic)
             exportURL = url
-            showingShare = true
         } catch {
             exportURL = nil
         }

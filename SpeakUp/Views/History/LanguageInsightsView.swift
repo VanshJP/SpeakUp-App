@@ -63,7 +63,8 @@ struct LanguageInsightsView: View {
                         title: "Weak language",
                         value: String(format: "%.1f", profile.weakRate),
                         color: AppColors.categoryAmber,
-                        delta: -profile.weakRateDelta
+                        delta: profile.weakRateDelta,
+                        higherIsBetter: false
                     )
 
                     Spacer()
@@ -79,6 +80,7 @@ struct LanguageInsightsView: View {
                         value: String(format: "%.1f", profile.powerRate),
                         color: AppColors.success,
                         delta: profile.powerRateDelta,
+                        higherIsBetter: true,
                         alignment: .trailing
                     )
                 }
@@ -99,27 +101,33 @@ struct LanguageInsightsView: View {
         value: String,
         color: Color,
         delta: Double,
+        higherIsBetter: Bool,
         alignment: HorizontalAlignment = .leading
     ) -> some View {
         VStack(alignment: alignment, spacing: 4) {
             StatPair(value: value, label: title, valueColor: color, alignment: alignment)
 
-            deltaCaption(delta)
+            deltaCaption(delta, higherIsBetter: higherIsBetter)
                 .frame(maxWidth: .infinity, alignment: alignment == .trailing ? .trailing : .leading)
         }
     }
 
+    /// The printed number and arrow always follow the rate itself; only the
+    /// colour knows which direction is good. Weak language used to pass in a
+    /// negated delta, so a rise printed as "↘ −1.0".
     @ViewBuilder
-    private func deltaCaption(_ delta: Double) -> some View {
+    private func deltaCaption(_ delta: Double, higherIsBetter: Bool) -> some View {
         if abs(delta) >= 0.3 {
             Label(
                 "\(delta > 0 ? "+" : "")\(String(format: "%.1f", delta)) recent half",
                 systemImage: delta > 0 ? "arrow.up.right" : "arrow.down.right"
             )
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(delta > 0 ? AppColors.success : AppColors.error)
+            .monospacedDigit()
+            // Slipping is amber on this page, never red.
+            .foregroundStyle((delta > 0) == higherIsBetter ? AppColors.success : AppColors.warning)
         } else {
-            Text("steady")
+            Text("Steady")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
@@ -131,7 +139,7 @@ struct LanguageInsightsView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 GlassCardTitle("Crutch words", icon: "exclamationmark.bubble.fill") {
-                    Text("lower is better")
+                    Text("Lower is better")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -207,9 +215,10 @@ struct LanguageInsightsView: View {
     private func directionBadge(_ direction: UsageDirection) -> some View {
         switch direction {
         case .rising:
+            // A crutch on the rise is slipping: amber, the page's one colour for it.
             Image(systemName: "arrow.up.right")
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(AppColors.error)
+                .foregroundStyle(AppColors.warning)
                 .accessibilityLabel("rising")
         case .falling:
             Image(systemName: "arrow.down.right")
@@ -411,14 +420,7 @@ struct LanguageInsightsView: View {
 
     private func suggestionRow(_ suggestion: LexiconSuggestion) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: suggestion.icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(toneColor(suggestion.tone))
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(toneColor(suggestion.tone).opacity(0.13))
-                )
+            IconChip(icon: suggestion.icon, tint: toneColor(suggestion.tone), size: 28)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(suggestion.title)

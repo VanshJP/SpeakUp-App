@@ -1,16 +1,41 @@
 import SwiftUI
 
+/// The three lists behind a take: words to use, names and terms transcripts
+/// should spell right, and the words that count as fillers.
+nonisolated enum WordListTab: Int, CaseIterable, Identifiable {
+    case words, names, fillers
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .words: "Words"
+        case .names: "Names & terms"
+        case .fillers: "Fillers"
+        }
+    }
+}
+
 struct WordBankView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var viewModel: SettingsViewModel
-    var showDismissButton: Bool = true
-    @State private var selectedTab = 0
+    let showDismissButton: Bool
+    @State private var selectedTab: WordListTab
     @State private var isWordInputFocused = false
     @State private var isDictationInputFocused = false
     @State private var isFillerInputFocused = false
     @State private var newFillerIsContextDependent = false
+    @State private var showingFillerReset = false
 
     @State private var dictationEngine = DictationService()
+
+    /// `initialTab` lets a caller land on the list it is about - Analysis'
+    /// filler toggle opens straight on Fillers.
+    init(viewModel: SettingsViewModel, showDismissButton: Bool = true, initialTab: WordListTab = .words) {
+        _viewModel = Bindable(viewModel)
+        self.showDismissButton = showDismissButton
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         ZStack {
@@ -18,24 +43,21 @@ struct WordBankView: View {
                 .ignoresSafeArea(.keyboard)
 
             VStack(spacing: 0) {
-                Picker("", selection: $selectedTab) {
-                    Text("Vocab").tag(0)
-                    Text("Dictionary").tag(1)
-                    Text("Filler Words").tag(2)
-                }
-                .pickerStyle(.segmented)
+                SectionPicker(
+                    sections: WordListTab.allCases,
+                    selection: $selectedTab,
+                    label: { $0.title }
+                )
                 .padding(.horizontal)
                 .padding(.top, 8)
                 .padding(.bottom, 4)
 
                 PageScrollView {
                     VStack(spacing: 16) {
-                        if selectedTab == 0 {
-                            wordBankTab
-                        } else if selectedTab == 1 {
-                            dictationDictionaryTab
-                        } else {
-                            fillerWordsTab
+                        switch selectedTab {
+                        case .words: wordBankTab
+                        case .names: dictationDictionaryTab
+                        case .fillers: fillerWordsTab
                         }
                     }
                     .padding()
@@ -43,9 +65,9 @@ struct WordBankView: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
-
-                // Bottom input area - pinned outside scroll
-                bottomInputBar
+                // A bar, not a material slab: the list scrolls under a soft
+                // edge instead of stopping at a flat grey band.
+                .safeAreaBar(edge: .bottom) { bottomInputBar }
             }
         }
         .navigationTitle("Word Lists")
@@ -53,18 +75,13 @@ struct WordBankView: View {
         .toolbar {
             if showDismissButton {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.white)
-                    }
+                    Button(role: .close) { dismiss() }
                 }
             }
         }
-        .onChange(of: selectedTab) {
+        .onChange(of: selectedTab) { previousTab, _ in
             if dictationEngine.isListening {
-                stopDictationAndAdd()
+                stopDictationAndAdd(into: previousTab)
             }
         }
         // Leaving mid-dictation - closing the sheet, or opening the Word
@@ -73,6 +90,16 @@ struct WordBankView: View {
             if dictationEngine.isListening {
                 stopDictationAndAdd()
             }
+        }
+        .alert("Reset filler words?", isPresented: $showingFillerReset) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                withAnimation(.spring(duration: 0.3)) {
+                    viewModel.resetFillersToDefaults()
+                }
+            }
+        } message: {
+            Text("Your custom fillers are deleted and every default filler comes back.")
         }
     }
 
@@ -83,44 +110,32 @@ struct WordBankView: View {
         VStack(spacing: 8) {
             if let error = dictationEngine.errorMessage {
                 errorLabel(error)
-            } else if selectedTab == 0, let error = viewModel.vocabWordError {
+            } else if selectedTab == .words, let error = viewModel.vocabWordError {
                 errorLabel(error)
-            } else if selectedTab == 1, let error = viewModel.dictationWordError {
+            } else if selectedTab == .names, let error = viewModel.dictationWordError {
                 errorLabel(error)
-            } else if selectedTab == 2, let error = viewModel.fillerWordError {
+            } else if selectedTab == .fillers, let error = viewModel.fillerWordError {
                 errorLabel(error)
             }
 
-            if selectedTab == 0 {
-                bottomVocabInput
-            } else if selectedTab == 1 {
-                bottomDictionaryInput
-            } else {
-                bottomFillerInput
+            switch selectedTab {
+            case .words: bottomVocabInput
+            case .names: bottomDictionaryInput
+            case .fillers: bottomFillerInput
             }
         }
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(.white.opacity(0.06))
-                        .frame(height: 0.5)
-                }
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
     }
 
     private var bottomVocabInput: some View {
         HStack(spacing: 10) {
             micButton(tint: AppColors.primary)
 
-            HStack(spacing: 8) {
+            inputField {
                 PersistentTextField(
-                    hint: "Add a word...",
+                    hint: "Add a word…",
                     text: $viewModel.newVocabWord,
                     isFocused: $isWordInputFocused,
                     onSubmit: { viewModel.addVocabWord() }
@@ -128,26 +143,11 @@ struct WordBankView: View {
                 .frame(height: 22)
 
                 if !viewModel.newVocabWord.isEmpty {
-                    Button {
+                    clearButton {
                         viewModel.newVocabWord = ""
                         viewModel.vocabWordError = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.3))
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(.white.opacity(0.06))
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
-                    }
             }
         }
     }
@@ -156,9 +156,9 @@ struct WordBankView: View {
         HStack(spacing: 10) {
             micButton(tint: AppColors.primary)
 
-            HStack(spacing: 8) {
+            inputField {
                 PersistentTextField(
-                    hint: "Add a name or phrase...",
+                    hint: "Add a name or term…",
                     text: $viewModel.newDictationBiasWord,
                     isFocused: $isDictationInputFocused,
                     onSubmit: { viewModel.addDictationBiasWord() }
@@ -166,39 +166,25 @@ struct WordBankView: View {
                 .frame(height: 22)
 
                 if !viewModel.newDictationBiasWord.isEmpty {
-                    Button {
+                    clearButton {
                         viewModel.newDictationBiasWord = ""
                         viewModel.dictationWordError = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.3))
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(.white.opacity(0.06))
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
-                    }
             }
         }
     }
 
     private var bottomFillerInput: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(spacing: 4) {
+            inputField {
                 Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.warning)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 PersistentTextField(
-                    hint: "Add custom filler...",
+                    hint: "Add a filler word…",
                     text: $viewModel.newFillerWord,
                     isFocused: $isFillerInputFocused,
                     onSubmit: { viewModel.addCustomFiller(isContextDependent: newFillerIsContextDependent) }
@@ -206,46 +192,58 @@ struct WordBankView: View {
                 .frame(height: 22)
 
                 if !viewModel.newFillerWord.isEmpty {
-                    Button {
+                    clearButton {
                         viewModel.newFillerWord = ""
                         viewModel.fillerWordError = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.3))
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(.white.opacity(0.06))
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
-                    }
             }
 
             HStack(spacing: 6) {
-                Text("Detect as")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.4))
+                Text("Detect")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                CardPill(label: "Always", isSelected: !newFillerIsContextDependent, tint: AppColors.warning) {
-                    withAnimation(.spring(response: 0.25)) {
-                        newFillerIsContextDependent = false
-                    }
+                CardPill(label: "Always", isSelected: !newFillerIsContextDependent) {
+                    newFillerIsContextDependent = false
                 }
 
-                CardPill(label: "Context-only", isSelected: newFillerIsContextDependent, tint: AppColors.warning) {
-                    withAnimation(.spring(response: 0.25)) {
-                        newFillerIsContextDependent = true
-                    }
+                CardPill(label: "In context", isSelected: newFillerIsContextDependent) {
+                    newFillerIsContextDependent = true
                 }
             }
         }
+    }
+
+    private func inputField<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            content()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            Capsule()
+                .fill(.white.opacity(0.06))
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                }
+        }
+    }
+
+    /// Drawn at glyph size, hit-tested at 44pt: the negative padding hands the
+    /// extra back so the field keeps its height when the button appears.
+    private func clearButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressStyle())
+        .padding(-12)
+        .accessibilityLabel("Clear")
     }
 
     private func micButton(tint: Color) -> some View {
@@ -269,8 +267,11 @@ struct WordBankView: View {
                     .foregroundStyle(dictationEngine.isListening ? tint : .white.opacity(0.5))
                     .symbolEffect(.pulse, isActive: dictationEngine.isListening)
             }
+            .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+            .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel(dictationEngine.isListening ? "Stop dictating and add words" : "Dictate words")
     }
 
     // MARK: - Dictation Handling
@@ -288,17 +289,20 @@ struct WordBankView: View {
         }
     }
 
-    private func stopDictationAndAdd() {
+    /// `tab` is the list the words were dictated for. A tab switch calls this
+    /// after `selectedTab` has already moved on, which used to file the words
+    /// under the tab you were leaving for.
+    private func stopDictationAndAdd(into tab: WordListTab? = nil) {
         let words = dictationEngine.recognizedWords
         dictationEngine.stop()
 
         guard !words.isEmpty else { return }
 
         withAnimation(.spring(duration: 0.25)) {
-            if selectedTab == 0 {
-                viewModel.addVocabWords(words)
-            } else if selectedTab == 1 {
-                viewModel.addDictationBiasWords(words)
+            switch tab ?? selectedTab {
+            case .words: _ = viewModel.addVocabWords(words)
+            case .names: _ = viewModel.addDictationBiasWords(words)
+            case .fillers: break
             }
         }
     }
@@ -316,7 +320,7 @@ struct WordBankView: View {
             NavigationLink {
                 WordLibraryView()
             } label: {
-                GlassCard(cornerRadius: 16, tint: AppColors.categorySage.opacity(0.07), padding: 14) {
+                GlassCard(tint: AppColors.categorySage.opacity(0.06), padding: 14) {
                     HStack(spacing: 12) {
                         IconChip(icon: "character.book.closed.fill", tint: AppColors.categorySage, size: 32)
 
@@ -343,15 +347,11 @@ struct WordBankView: View {
 
             vocabWordsSection
 
-            HStack(spacing: 8) {
-                Image(systemName: "character.book.closed.fill")
-                    .font(.caption)
-                    .foregroundStyle(AppColors.success)
-                Text("Tracked vocab is highlighted and counted in transcript analytics.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 4)
+            Text("Words here are highlighted in your transcripts and counted each time you use them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
         }
     }
 
@@ -359,15 +359,11 @@ struct WordBankView: View {
 
     private var dictationDictionaryTab: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "waveform.and.magnifyingglass")
-                    .font(.caption)
-                    .foregroundStyle(AppColors.primary)
-                Text("Words and names here bias Whisper transcription accuracy. They do not count as vocab usage.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 4)
+            Text("Add names, places, and jargon so your transcripts spell them right. They don't count toward your vocabulary.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
 
             if dictationEngine.isListening {
                 dictationPreview(tint: AppColors.primary)
@@ -387,28 +383,14 @@ struct WordBankView: View {
                         .font(.caption)
                         .foregroundStyle(tint)
                         .symbolEffect(.pulse)
-                    Text("Listening, say words to add")
+                    Text("Listening. Say the words to add.")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    Button {
+                    GlassButton(title: "Done", style: .secondary, size: .small) {
+                        Haptics.light()
                         stopDictationAndAdd()
-                    } label: {
-                        Text("Done")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 5)
-                            .background {
-                                Capsule()
-                                    .fill(tint.opacity(0.3))
-                                    .overlay {
-                                        Capsule()
-                                            .strokeBorder(tint.opacity(0.5), lineWidth: 0.5)
-                                    }
-                            }
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if !dictationEngine.recognizedWords.isEmpty {
@@ -439,36 +421,22 @@ struct WordBankView: View {
 
     @ViewBuilder
     private var dictationWordsSection: some View {
-        if viewModel.dictationBiasWords.isEmpty {
+        let terms = viewModel.dictationBiasWords
+        if terms.isEmpty {
             GlassCard {
-                VStack(spacing: 12) {
-                    Image(systemName: "waveform.and.magnifyingglass")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.white.opacity(0.15))
-
-                    Text("No dictation terms yet")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.3))
-
-                    Text("Add names and terms below to bias transcription")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.2))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                EmptyStateInline(
+                    icon: "waveform.and.magnifyingglass",
+                    message: "No names or terms yet. Add the ones your transcripts get wrong."
+                )
             }
         } else {
             GlassCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("\(viewModel.dictationBiasWords.count) dictation terms")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
+                    GlassCardTitle(terms.count == 1 ? "1 name or term" : "\(terms.count) names and terms")
+                        .monospacedDigit()
 
                     FlowLayout(spacing: 6) {
-                        ForEach(viewModel.dictationBiasWords, id: \.self) { word in
+                        ForEach(terms, id: \.self) { word in
                             chipView(word, tint: AppColors.primary) {
                                 withAnimation(.spring(duration: 0.25)) {
                                     viewModel.removeDictationBiasWord(word)
@@ -484,36 +452,22 @@ struct WordBankView: View {
 
     @ViewBuilder
     private var vocabWordsSection: some View {
-        if viewModel.vocabWords.isEmpty {
+        let words = viewModel.vocabWords
+        if words.isEmpty {
             GlassCard {
-                VStack(spacing: 12) {
-                    Image(systemName: "character.book.closed")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.white.opacity(0.15))
-
-                    Text("No words yet")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.3))
-
-                    Text("Add words below to start tracking them")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.2))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                EmptyStateInline(
+                    icon: "character.book.closed",
+                    message: "No words yet. Add a few below to start tracking them."
+                )
             }
         } else {
             GlassCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("\(viewModel.vocabWords.count) words")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
+                    GlassCardTitle(words.count == 1 ? "1 word" : "\(words.count) words")
+                        .monospacedDigit()
 
                     FlowLayout(spacing: 6) {
-                        ForEach(viewModel.vocabWords, id: \.self) { word in
+                        ForEach(words, id: \.self) { word in
                             chipView(word, tint: AppColors.primary) {
                                 withAnimation(.spring(duration: 0.25)) {
                                     viewModel.removeVocabWord(word)
@@ -531,15 +485,11 @@ struct WordBankView: View {
 
     private var fillerWordsTab: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "waveform.badge.minus")
-                    .font(.caption)
-                    .foregroundStyle(AppColors.warning)
-                Text("Manage which words are detected as fillers during analysis. Custom fillers are always detected; context-dependent ones use speech patterns.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 4)
+            Text("Choose which words count as fillers when a take is scored.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
 
             alwaysDetectedSection
 
@@ -550,30 +500,10 @@ struct WordBankView: View {
             }
 
             if viewModel.hasFillerCustomizations {
-                Button {
-                    withAnimation(.spring(duration: 0.3)) {
-                        viewModel.resetFillersToDefaults()
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.caption)
-                        Text("Reset to defaults")
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(.white.opacity(0.06), lineWidth: 0.5)
-                            }
-                    }
+                GlassButton(title: "Reset to defaults", icon: "arrow.counterclockwise", style: .outline, fullWidth: true) {
+                    Haptics.warning()
+                    showingFillerReset = true
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -582,12 +512,12 @@ struct WordBankView: View {
         let unconditional = viewModel.activeFillerWords.filter { !$0.isContextDependent }
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Always detected", icon: "exclamationmark.triangle.fill")
+                GlassCardTitle("Always detected")
 
                 if unconditional.isEmpty {
-                    Text("All unconditional fillers removed")
+                    Text("You've removed every always-detected filler.")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(.secondary)
                 } else {
                     FlowLayout(spacing: 6) {
                         ForEach(unconditional, id: \.word) { item in
@@ -608,16 +538,16 @@ struct WordBankView: View {
         let contextual = viewModel.activeFillerWords.filter { $0.isContextDependent }
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Context-dependent", icon: "text.magnifyingglass")
+                GlassCardTitle("Detected in context")
 
-                Text("These are only flagged when speech patterns suggest filler usage (e.g. surrounded by pauses).")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.4))
+                Text("Flagged only when the pattern says filler, like a pause on either side.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 if contextual.isEmpty {
-                    Text("All context-dependent fillers removed")
+                    Text("You've removed every in-context filler.")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(.secondary)
                 } else {
                     FlowLayout(spacing: 6) {
                         ForEach(contextual, id: \.word) { item in
@@ -637,7 +567,7 @@ struct WordBankView: View {
     private var removedFillersSection: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Removed", icon: "eye.slash")
+                GlassCardTitle("Removed")
 
                 FlowLayout(spacing: 6) {
                     ForEach(viewModel.removedDefaultFillers.sorted(), id: \.self) { word in
@@ -656,15 +586,10 @@ struct WordBankView: View {
             Text(word)
                 .font(.caption.weight(.medium))
 
-            Button {
+            chipButton(icon: "xmark", label: "Remove \(word)", color: .white.opacity(0.6)) {
                 Haptics.light()
                 onRemove()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.45))
             }
-            .buttonStyle(.plain)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 10)
@@ -684,19 +609,14 @@ struct WordBankView: View {
         HStack(spacing: 5) {
             Text(word)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.secondary)
 
-            Button {
+            chipButton(icon: "plus", label: "Restore \(word)", color: AppColors.success) {
                 Haptics.light()
                 withAnimation(.spring(duration: 0.25)) {
                     viewModel.restoreDefaultFiller(word)
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(AppColors.success.opacity(0.7))
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -709,6 +629,23 @@ struct WordBankView: View {
                 }
         }
         .transition(.scale.combined(with: .opacity))
+    }
+
+    /// A chip's own ✕ or +, drawn at caption size and hit-tested at 44pt. The
+    /// negative padding returns the extra to the layout, so chips keep their
+    /// size; the old 8pt glyph was the whole target and VoiceOver could not
+    /// say which word it removed.
+    private func chipButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(color)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressStyle())
+        .padding(-14)
+        .accessibilityLabel(label)
     }
 
     private func errorLabel(_ error: String) -> some View {
@@ -747,33 +684,30 @@ private let vocabLevelChoices: [VocabLevelChoice] = [.automatic, .easy, .medium,
 struct VocabChallengeSettingsCard: View {
     @Bindable var viewModel: SettingsViewModel
 
+    private static let workoutCaption = "Spotlight a few words. Use each one in a sentence."
+    private static let teachCaption = "Mixes in a word you don't track yet."
+
     var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 12) {
+        // Rules start under the row titles: 14pt inset + 24pt glyph + 12pt gap.
+        GlassRowGroup(dividerInset: 50) {
+            row {
                 Toggle(isOn: $viewModel.vocabChallengeEnabled) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "character.book.closed")
-                            .foregroundStyle(AppColors.categorySage)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Daily word workout")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Spotlight a few words. Use each one in a sentence.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    Label("Daily word workout", systemImage: "character.book.closed")
+                        .font(.subheadline)
                 }
                 .tint(AppColors.primary)
-                .onChange(of: viewModel.vocabChallengeEnabled) { _, _ in
-                    viewModel.saveVocabChallengeSettings()
-                }
+                .accessibilityHint(Self.workoutCaption)
 
-                if viewModel.vocabChallengeEnabled {
-                    Divider()
+                caption(Self.workoutCaption)
+            }
+            .onChange(of: viewModel.vocabChallengeEnabled) { _, _ in
+                viewModel.saveVocabChallengeSettings()
+            }
 
+            if viewModel.vocabChallengeEnabled {
+                row {
                     HStack(spacing: 6) {
-                        Text("Words per day")
+                        Label("Words per day", systemImage: "number")
                             .font(.subheadline)
                         Spacer(minLength: 12)
                         ForEach([1, 2, 3], id: \.self) { count in
@@ -785,52 +719,75 @@ struct VocabChallengeSettingsCard: View {
                                 viewModel.vocabChallengeWordCount = count
                                 viewModel.saveVocabChallengeSettings()
                             }
-                            .accessibilityLabel("\(count) words per day")
+                            .accessibilityLabel(count == 1 ? "1 word per day" : "\(count) words per day")
                         }
                     }
+                }
 
+                row {
                     Toggle(isOn: $viewModel.vocabChallengeIntroduceNew) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Teach new words")
-                                .font(.subheadline)
-                            Text("Mix in a word you don't track yet")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        Label("Teach new words", systemImage: "sparkles")
+                            .font(.subheadline)
                     }
                     .tint(AppColors.primary)
-                    .onChange(of: viewModel.vocabChallengeIntroduceNew) { _, _ in
-                        viewModel.saveVocabChallengeSettings()
-                    }
+                    .accessibilityHint(Self.teachCaption)
 
-                    if viewModel.vocabChallengeIntroduceNew {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Word level")
-                                .font(.subheadline)
-                            HStack(spacing: 6) {
-                                ForEach(vocabLevelChoices, id: \.rawValue) { choice in
-                                    CardPill(
-                                        label: choice.label,
-                                        isSelected: viewModel.vocabChallengeLevelOverride == choice.rawValue
-                                    ) {
-                                        viewModel.vocabChallengeLevelOverride = choice.rawValue
-                                        viewModel.saveVocabChallengeSettings()
-                                    }
-                                    .accessibilityLabel("Word level \(choice.label)")
+                    caption(Self.teachCaption)
+                }
+                .onChange(of: viewModel.vocabChallengeIntroduceNew) { _, _ in
+                    viewModel.saveVocabChallengeSettings()
+                }
+
+                if viewModel.vocabChallengeIntroduceNew {
+                    row {
+                        Label("Word level", systemImage: "chart.bar")
+                            .font(.subheadline)
+
+                        HStack(spacing: 6) {
+                            ForEach(vocabLevelChoices, id: \.rawValue) { choice in
+                                CardPill(
+                                    label: choice.label,
+                                    isSelected: viewModel.vocabChallengeLevelOverride == choice.rawValue
+                                ) {
+                                    viewModel.vocabChallengeLevelOverride = choice.rawValue
+                                    viewModel.saveVocabChallengeSettings()
                                 }
+                                .accessibilityLabel("Word level \(choice.label)")
                             }
                         }
+                        .padding(.leading, 36)
                     }
                 }
             }
         }
+        .labelStyle(.row)
+    }
+
+    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            content()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, 36)
+            .accessibilityHidden(true)
     }
 }
 
+/// A single-choice chip. Selected is the solid white pill every filter chip
+/// wears (`FilterChip`, `SectionPicker`); idle is the painted capsule used on
+/// a plate, since these sit inside cards and glass on glass turns murky.
 private struct CardPill: View {
     let label: String
     let isSelected: Bool
-    var tint: Color = AppColors.primary
     var minWidth: CGFloat? = nil
     let action: () -> Void
 
@@ -841,24 +798,23 @@ private struct CardPill: View {
         } label: {
             Text(label)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.45))
+                // Same ink as the primary GlassButton on its white fill.
+                .foregroundStyle(isSelected ? Color(red: 0.07, green: 0.07, blue: 0.08) : .white.opacity(0.8))
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
                 .frame(minWidth: minWidth, minHeight: 30)
                 .background {
                     Capsule()
-                        .fill(isSelected ? tint.opacity(0.3) : Color.white.opacity(0.05))
+                        .fill(isSelected ? Color.white.opacity(0.92) : Color.white.opacity(0.10))
                         .overlay {
                             Capsule()
-                                .strokeBorder(
-                                    isSelected ? tint.opacity(0.55) : Color.white.opacity(0.08),
-                                    lineWidth: 0.5
-                                )
+                                .strokeBorder(Color.white.opacity(isSelected ? 0 : 0.16), lineWidth: 1)
                         }
                 }
+                // A 30pt chip in a 44pt target: the hit area grows around it.
+                .frame(minHeight: AppLayout.minHitTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
-

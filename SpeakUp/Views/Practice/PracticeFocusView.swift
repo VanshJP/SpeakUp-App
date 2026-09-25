@@ -12,6 +12,73 @@ struct PracticeToolRoute: Hashable {
 /// Pushing the outcome list itself.
 struct PracticeImproveRoute: Hashable {}
 
+// MARK: - Link Row
+
+/// A row that pushes, on a `GlassRowGroup`: identity chip, copy, an optional
+/// count, chevron.
+///
+/// The Improve list, the focus page, the Tools landing's entry rows and its
+/// search results all push from this row. They used to be a `GlassCard` each -
+/// four near-identical recipes at two chip sizes - where a list of rows belongs
+/// on one plate (ui-design-system checklist 9). Wrap it in a `NavigationLink`
+/// pressed with `RowPressStyle`.
+struct PracticeLinkRowLabel: View {
+    /// Where the group's hairlines start: under the text, not the chip.
+    static let dividerInset: CGFloat = horizontalPadding + chipSize + spacing
+
+    private static let horizontalPadding: CGFloat = 14
+    private static let chipSize: CGFloat = 34
+    private static let spacing: CGFloat = 12
+
+    let icon: String
+    var tint: Color = AppColors.primary
+    let title: String
+    var subtitle: String?
+    var meta: String?
+    var count: Int?
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            IconChip(icon: icon, tint: tint, size: Self.chipSize)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let meta {
+                    Text(meta)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 8)
+
+            if let count {
+                StatusPill(text: "\(count)", color: tint)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Improve entry
 
 /// The one row the outcome axis gets on the Library → Tools landing.
@@ -21,7 +88,7 @@ struct PracticeImproveRoute: Hashable {}
 /// the longest screen in the app. The axis has not been demoted, it has been
 /// put where it is decided: every tool page still groups by it. This row is
 /// how you enter from the other end, when you know the problem and not the
-/// format.
+/// format. It shares one `GlassRowGroup` with the Words entry.
 struct PracticeImproveEntryRow: View {
     private var summary: String {
         let focuses = PracticeToolKind.coveredFocuses
@@ -33,42 +100,14 @@ struct PracticeImproveEntryRow: View {
 
     var body: some View {
         NavigationLink(value: PracticeImproveRoute()) {
-            GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.07), padding: 14) {
-                HStack(spacing: 12) {
-                    IconChip(icon: "target", size: 36)
-
-                    // The count sits under the copy rather than beside it.
-                    // Sharing the row's width with the title wrapped both -
-                    // "8 outcomes · 41 exercises" broke across two lines and
-                    // squeezed the sentence it was meant to annotate.
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Not sure which one?")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.leading)
-
-                        Text("Start from what you want to change")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-
-                        Text(summary)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                            .padding(.top, 1)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
+            PracticeLinkRowLabel(
+                icon: "target",
+                title: "Not sure which one?",
+                subtitle: "Start from what you want to change",
+                meta: summary
+            )
         }
-        .buttonStyle(GlassPressStyle())
+        .buttonStyle(RowPressStyle())
         .accessibilityLabel("Browse by what you want to improve. \(summary).")
     }
 }
@@ -79,7 +118,7 @@ struct PracticeImproveEntryRow: View {
 struct PracticeImproveListView: View {
     var body: some View {
         ZStack {
-            AppBackground()
+            AppBackground(style: .subtle)
 
             PageScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -88,7 +127,7 @@ struct PracticeImproveListView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    VStack(spacing: 10) {
+                    GlassRowGroup(dividerInset: PracticeLinkRowLabel.dividerInset) {
                         ForEach(PracticeToolKind.coveredFocuses) { focus in
                             PracticeFocusRow(focus: focus)
                         }
@@ -107,7 +146,8 @@ struct PracticeImproveListView: View {
 
 // MARK: - Focus Row
 
-/// One outcome, as offered on the Library → Tools landing.
+/// One outcome, as a row on the Improve list or in Tools search results.
+/// Always inside a `GlassRowGroup`.
 struct PracticeFocusRow: View {
     let focus: PracticeFocus
 
@@ -122,31 +162,14 @@ struct PracticeFocusRow: View {
 
     var body: some View {
         NavigationLink(value: focus) {
-            GlassCard(cornerRadius: 16, tint: focus.color.opacity(0.06), padding: 13) {
-                HStack(spacing: 12) {
-                    IconChip(icon: focus.icon, tint: focus.color, size: 34)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(focus.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.leading)
-
-                        Text(toolSummary)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.tertiary)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
+            PracticeLinkRowLabel(
+                icon: focus.icon,
+                tint: focus.color,
+                title: focus.title,
+                meta: toolSummary
+            )
         }
-        .buttonStyle(GlassPressStyle())
+        .buttonStyle(RowPressStyle())
         .accessibilityLabel("\(focus.title). \(focus.promise). \(toolSummary)")
     }
 }
@@ -170,15 +193,21 @@ struct PracticeFocusDetailView: View {
 
     var body: some View {
         ZStack {
-            AppBackground()
+            AppBackground(style: .subtle)
 
             PageScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    header
+                    // One line under the nav title, like every tool page. The
+                    // page used to open on its own title again in title3,
+                    // under a nav bar that already named it.
+                    Text(focus.promise)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    VStack(spacing: 12) {
+                    GlassRowGroup(dividerInset: PracticeLinkRowLabel.dividerInset) {
                         ForEach(tools) { tool in
-                            toolCard(tool)
+                            toolRow(tool)
                         }
                     }
                 }
@@ -187,62 +216,27 @@ struct PracticeFocusDetailView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .navigationTitle(focus.shortTitle)
+        .navigationTitle(focus.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(focus.title)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(focus.promise)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func toolCard(_ tool: PracticeToolKind) -> some View {
+    private func toolRow(_ tool: PracticeToolKind) -> some View {
         let count = tool.itemCount(for: focus)
 
         return NavigationLink(value: PracticeToolRoute(tool: tool, focus: focus)) {
-            GlassCard(cornerRadius: 16, tint: tool.color.opacity(0.06), padding: 14) {
-                HStack(spacing: 13) {
-                    IconChip(icon: tool.icon, tint: tool.color, size: 36)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(tool.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-
-                        // The format line, not the outcome line. On this page
-                        // the outcome is the heading - what differs between
-                        // these four rows is what the next few minutes cost.
-                        Text(tool.format)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Text("\(count)")
-                        .font(.caption.weight(.bold).monospacedDigit())
-                        .foregroundStyle(tool.color)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background { Capsule().fill(tool.color.opacity(0.18)) }
-                }
-            }
+            // The format line, not the outcome line. On this page the outcome
+            // is the heading - what differs between these rows is what the
+            // next few minutes cost.
+            PracticeLinkRowLabel(
+                icon: tool.icon,
+                tint: tool.color,
+                title: tool.title,
+                subtitle: tool.format,
+                count: count
+            )
         }
-        .buttonStyle(GlassPressStyle())
+        .buttonStyle(RowPressStyle())
         .accessibilityLabel(
             "\(tool.title). \(count) \(tool.itemNoun)\(count == 1 ? "" : "s") for \(focus.title). \(tool.format)"
         )

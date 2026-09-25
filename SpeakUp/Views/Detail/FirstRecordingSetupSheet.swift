@@ -29,25 +29,32 @@ struct FirstRecordingSetupSheet: View {
                 PageScrollView {
                     VStack(alignment: .leading, spacing: 28) {
                         header
-                        section("Your sessions") { sessionCard }
-                        section("Optional extras") { optionsCard }
+                        section("Your sessions") { sessionRows }
+                        section("Optional extras") { optionRows }
                     }
-                    .padding(.top, 28)
+                    .padding(.top, 8)
                     .pageContentInsets()
                 }
                 .scrollIndicators(.hidden)
-                .safeAreaInset(edge: .bottom) { footer }
+                .safeAreaBar(edge: .bottom) { footer }
             }
-            // No bar on the root: an empty inline bar sat the header under the
-            // grabber. `AIModelSettingsView` still gets its own bar when pushed.
-            .toolbar(.hidden, for: .navigationBar)
+            // The bar carries the sheet's close button, so it is never the
+            // empty inline bar that used to sit the header under the grabber.
+            .navigationTitle("Setup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
+            .toolbarBackground(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showingAISettings) {
                 AIModelSettingsView()
             }
             .sheet(isPresented: $showingCalibration) {
-                NavigationStack {
-                    VoiceCalibrationView(onComplete: applyCalibration)
-                }
+                // VoiceCalibrationView owns its NavigationStack; a second one
+                // around it nested two bars.
+                VoiceCalibrationView(onComplete: applyCalibration)
             }
             .onAppear {
                 reminderEnabled = settings?.dailyReminderEnabled ?? false
@@ -84,61 +91,59 @@ struct FirstRecordingSetupSheet: View {
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .eyebrowStyle()
-                .padding(.leading, 4)
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader(title)
             content()
         }
     }
 
     // MARK: - Session Defaults
 
+    /// Where each hairline starts: row padding, the 30pt chip, the gap.
+    private static let dividerInset: CGFloat = 16 + 30 + 12
+
     /// The three defaults a new user feels on their very next take. The rest of
     /// Session Defaults (cue sounds, haptics, timer-end behavior) are refinements
     /// nobody has an opinion on after one recording.
-    private var sessionCard: some View {
-        GlassCard(padding: 4) {
-            VStack(spacing: 0) {
-                rowShell(
-                    icon: "clock",
-                    tint: AppColors.primary,
+    private var sessionRows: some View {
+        GlassRowGroup(dividerInset: Self.dividerInset) {
+            rowShell(
+                icon: "clock",
+                tint: AppColors.primary,
+                title: "Take length",
+                detail: "How long each prompt runs."
+            ) {
+                valueMenu(
                     title: "Take length",
-                    detail: "How long each prompt runs."
-                ) {
-                    valueMenu(
-                        selection: settingBinding(\.defaultDuration, default: 60),
-                        options: RecordingDuration.allCases.map { ($0.rawValue, $0.displayName) }
-                    )
-                }
+                    selection: settingBinding(\.defaultDuration, default: 60),
+                    options: RecordingDuration.allCases.map { ($0.rawValue, $0.displayName) }
+                )
+            }
 
-                rowDivider
-
-                rowShell(
-                    icon: "timer",
-                    tint: AppColors.categoryAmber,
+            rowShell(
+                icon: "timer",
+                tint: AppColors.categoryAmber,
+                title: "Countdown",
+                detail: "Thinking time before recording starts."
+            ) {
+                valueMenu(
                     title: "Countdown",
-                    detail: "Thinking time before recording starts."
-                ) {
-                    valueMenu(
-                        selection: settingBinding(\.countdownDuration, default: 10),
-                        options: CountdownDuration.allCases.map { ($0.rawValue, $0.displayName) }
-                    )
-                }
+                    selection: settingBinding(\.countdownDuration, default: 10),
+                    options: CountdownDuration.allCases.map { ($0.rawValue, $0.displayName) }
+                )
+            }
 
-                rowDivider
-
-                rowShell(
-                    icon: "target",
-                    tint: AppColors.success,
+            rowShell(
+                icon: "target",
+                tint: AppColors.success,
+                title: "Weekly goal",
+                detail: "How many sessions a week you are aiming for."
+            ) {
+                valueMenu(
                     title: "Weekly goal",
-                    detail: "How many sessions a week you are aiming for."
-                ) {
-                    valueMenu(
-                        selection: settingBinding(\.weeklyGoalSessions, default: 5),
-                        options: (1...14).map { ($0, "\($0)") }
-                    )
-                }
+                    selection: settingBinding(\.weeklyGoalSessions, default: 5),
+                    options: (1...14).map { ($0, "\($0)") }
+                )
             }
         }
     }
@@ -158,8 +163,13 @@ struct FirstRecordingSetupSheet: View {
         )
     }
 
-    private func valueMenu(selection: Binding<Int>, options: [(value: Int, label: String)]) -> some View {
-        Menu {
+    private func valueMenu(
+        title: String,
+        selection: Binding<Int>,
+        options: [(value: Int, label: String)]
+    ) -> some View {
+        let current = options.first { $0.value == selection.wrappedValue }?.label ?? "\(selection.wrappedValue)"
+        return Menu {
             Picker("", selection: selection) {
                 ForEach(options, id: \.value) { option in
                     Text(option.label).tag(option.value)
@@ -167,7 +177,7 @@ struct FirstRecordingSetupSheet: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Text(options.first { $0.value == selection.wrappedValue }?.label ?? "\(selection.wrappedValue)")
+                Text(current)
                     .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
                 Image(systemName: "chevron.up.chevron.down")
@@ -177,48 +187,48 @@ struct FirstRecordingSetupSheet: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .glassEffect(.regular.interactive(), in: .capsule)
+            // Painted, not glass: the row group is already a glass plate, and
+            // glass on glass samples the plate and reads as a murky band.
+            .background { Capsule().fill(Color.white.opacity(0.10)) }
+            .overlay { Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Rectangle())
         }
+        // VoiceOver heard only "1 min": the value, with nothing naming it.
+        .accessibilityLabel(title)
+        .accessibilityValue(current)
     }
 
     // MARK: - Options
 
-    private var optionsCard: some View {
-        GlassCard(padding: 4) {
-            VStack(spacing: 0) {
-                reminderRow
+    private var optionRows: some View {
+        GlassRowGroup(dividerInset: Self.dividerInset) {
+            reminderRow
 
-                rowDivider
+            linkRow(
+                icon: "waveform.and.person.filled",
+                tint: AppColors.primary,
+                title: "Calibrate your voice",
+                detail: hasCalibratedVoice
+                    ? "Read again any time. Your profile also sharpens itself as you record."
+                    : "Twenty seconds of speech makes speaker separation and pace targets yours.",
+                pill: hasCalibratedVoice ? "Saved" : nil
+            ) {
+                AnalyticsService.shared.log(.onboardingStep("calibrate", action: "open"))
+                showingCalibration = true
+            }
 
-                linkRow(
-                    icon: "waveform.and.person.filled",
-                    tint: AppColors.primary,
-                    title: "Calibrate your voice",
-                    detail: hasCalibratedVoice
-                        ? "Read again any time. Your profile also sharpens itself as you record."
-                        : "Twenty seconds of speech makes speaker separation and pace targets yours.",
-                    pill: hasCalibratedVoice ? "Saved" : nil
-                ) {
-                    AnalyticsService.shared.log(.onboardingStep("calibrate", action: "open"))
-                    showingCalibration = true
-                }
-
-                rowDivider
-
-                linkRow(
-                    icon: "sparkle",
-                    tint: AppColors.categoryBrandBright,
-                    title: "AI coherence feedback",
-                    detail: aiBackendLabel == nil
-                        ? "Optional. Uses Apple Intelligence, or a model you download."
-                        : "Scores how well your points hang together, on top of the usual metrics.",
-                    pill: aiBackendLabel
-                ) {
-                    AnalyticsService.shared.log(.onboardingStep("intelligence", action: "open"))
-                    showingAISettings = true
-                }
+            linkRow(
+                icon: "sparkle",
+                tint: AppColors.categoryBrandBright,
+                title: "AI coherence feedback",
+                detail: aiBackendLabel == nil
+                    ? "Optional. Uses Apple Intelligence, or a model you download."
+                    : "Scores how well your points hang together, on top of the usual metrics.",
+                pill: aiBackendLabel
+            ) {
+                AnalyticsService.shared.log(.onboardingStep("intelligence", action: "open"))
+                showingAISettings = true
             }
         }
     }
@@ -288,8 +298,10 @@ struct FirstRecordingSetupSheet: View {
             accessory()
         }
         .frame(minHeight: AppLayout.minHitTarget)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        // Rows pad themselves inside a `GlassRowGroup`, which has no padding
+        // of its own - this is the old card inset plus row inset.
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     /// The switch is the ask, so the row itself is not tappable. `onChange`
@@ -335,27 +347,23 @@ struct FirstRecordingSetupSheet: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(GlassPressStyle())
+        // A row lights up edge to edge; scaling it would tear it away from
+        // the rows above and below.
+        .buttonStyle(RowPressStyle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
 
-    private var rowDivider: some View {
-        Divider()
-            .overlay(AppColors.cardStroke)
-            .padding(.leading, 54)
-    }
-
     // MARK: - Footer
 
-    /// Pinned, so the exit stays in reach however far the sheet is scrolled.
-    /// No material plate behind it - on a short page that was a grey slab
-    /// floating over empty canvas.
-    /// Labelled with what happens next rather than "Done", because nothing here
-    /// is pending a commit.
+    /// Pinned in a scroll-edge bar, so the exit stays in reach however far the
+    /// sheet is scrolled - no material plate behind it. "Continue" rather than
+    /// "Done", because nothing here is pending a commit; rather than "Start
+    /// practicing", because it leads back to Today (and on a first run into
+    /// the app tour), not into a take.
     private var footer: some View {
         GlassButton(
-            title: "Start practicing",
+            title: "Continue",
             icon: "arrow.right",
             iconPosition: .right,
             style: .primary,

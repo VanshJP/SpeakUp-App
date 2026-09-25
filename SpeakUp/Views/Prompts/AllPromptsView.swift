@@ -62,12 +62,23 @@ extension AllPromptsView {
             prompts = prompts.filter { $0.difficulty == difficulty }
         }
 
-        if !searchText.isEmpty {
-            prompts = prompts.filter { $0.text.localizedStandardContains(searchText) }
+        if !query.isEmpty {
+            prompts = prompts.filter { $0.text.localizedStandardContains(query) }
         }
 
         prompts.sort { $0.category < $1.category }
         return prompts
+    }
+
+    private var query: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A query or a difficulty turns the landing into a results list. The
+    /// category grid can show neither, and used to swallow both: typing
+    /// changed nothing on screen.
+    private var isNarrowed: Bool {
+        !query.isEmpty || selectedDifficulty != nil
     }
 
     private var hasActiveFilters: Bool {
@@ -79,31 +90,49 @@ extension AllPromptsView {
     var body: some View {
         let prompts = filteredPrompts
 
-        return screenDecorations(
-            VStack(spacing: 16) {
-                InlineSearchField(text: $searchText, prompt: "Search prompts…") {
-                    filterMenu(prompts)
-                }
-
-                if selectedCategory == nil {
-                    VStack(spacing: 16) {
-                        filterChips
-                        landingContent(prompts)
+        return ScrollViewReader { proxy in
+            screenDecorations(
+                VStack(spacing: 16) {
+                    InlineSearchField(
+                        text: $searchText,
+                        prompt: searchPrompt(count: prompts.count),
+                        scopes: searchScopes
+                    ) {
+                        filterMenu(prompts)
                     }
-                    .transition(.asymmetric(
-                        insertion: .push(from: .leading),
-                        removal: .push(from: .trailing)
-                    ))
-                } else {
-                    categoryDetailContent(prompts)
-                        .transition(.asymmetric(
-                            insertion: .push(from: .trailing),
-                            removal: .push(from: .leading)
-                        ))
+                    .id(Self.topID)
+
+                    // The grid and a category's list fade into each other;
+                    // glass never slides.
+                    if selectedCategory == nil {
+                        VStack(spacing: 16) {
+                            filterChips
+                            landingContent(prompts)
+                        }
+                        .transition(.opacity)
+                    } else {
+                        categoryDetailContent(prompts)
+                            .transition(.opacity)
+                    }
+                }
+            )
+            // Opening or leaving a category swaps the list in place, and the
+            // scroll offset outlived the swap: a card tapped low in the grid
+            // opened its list halfway down, pill and first prompts off-screen.
+            // The hub owns the scroll view, so this reader scrolls it from
+            // inside. Anchoring the field's *bottom* to the viewport's bottom
+            // asks for an offset above the content's top, which clamps to the
+            // resting top; `.top` would park the field under the pinned
+            // section picker.
+            .onChange(of: selectedCategory) {
+                withAnimation(AppMotion.settle) {
+                    proxy.scrollTo(Self.topID, anchor: .bottom)
                 }
             }
-        )
+        }
     }
+
+    private static let topID = "prompts-top"
 
     private func screenDecorations(_ base: some View) -> some View {
         base
@@ -135,17 +164,16 @@ extension AllPromptsView {
                 get: { importConfirmation != nil },
                 set: { if !$0 { importConfirmation = nil } }
             )) {
-                Button("Cancel", role: .cancel) { importConfirmation = nil }
-                Button("Import") { confirmImport() }
+                // Nothing new: an Import button here imported nothing.
+                if importConfirmation?.newCount == 0 {
+                    Button("OK", role: .cancel) { importConfirmation = nil }
+                } else {
+                    Button("Cancel", role: .cancel) { importConfirmation = nil }
+                    Button("Import") { confirmImport() }
+                }
             } message: {
                 if let confirmation = importConfirmation {
-                    let newCount = confirmation.newCount
-                    let dupeCount = confirmation.duplicateCount
-                    if dupeCount > 0 {
-                        Text("Import \(newCount) new prompt\(newCount == 1 ? "" : "s")? (\(dupeCount) duplicate\(dupeCount == 1 ? "" : "s") will be skipped.)")
-                    } else {
-                        Text("Import \(newCount) prompt\(newCount == 1 ? "" : "s")? They will be added as custom prompts.")
-                    }
+                    Text(confirmation.message)
                 }
             }
             .alert("Delete Prompt?", isPresented: Binding(
@@ -162,7 +190,7 @@ extension AllPromptsView {
             } message: {
                 Text("This prompt will be permanently deleted.")
             }
-            .alert("Error", isPresented: $showingError) {
+            .alert("Couldn't Import Prompts", isPresented: $showingError) {
                 Button("OK") {}
             } message: {
                 if let errorMessage {
@@ -178,8 +206,10 @@ extension AllPromptsView {
                 Button {
                     csvService.shareCSV(prompts: prompts)
                 } label: {
+                    // Named for what it exports: a query or a chip narrows
+                    // the file as much as a pill does.
                     Label(
-                        hasActiveFilters ? "Export Filtered (\(prompts.count))" : "Export All Prompts",
+                        prompts.count < allPrompts.count ? "Export Filtered (\(prompts.count))" : "Export All Prompts",
                         systemImage: "square.and.arrow.up"
                     )
                 }
@@ -207,7 +237,7 @@ extension AllPromptsView {
                         withAnimation { selectedDifficulty = difficulty }
                     } label: {
                         HStack {
-                            Label(difficulty.displayName, systemImage: difficultyIcon(difficulty))
+                            Label(difficulty.displayName, systemImage: difficulty.iconName)
                             if selectedDifficulty == difficulty { Spacer(); Image(systemName: "checkmark") }
                         }
                     }
@@ -248,72 +278,73 @@ extension AllPromptsView {
     private func countForFilter(_ filter: PromptFilter) -> Int? {
         switch filter {
         case .all: return nil
-        case .unanswered: return allPrompts.count - answeredPromptIDs.count
+        // Counted off the library, not subtracted: a take can outlive its
+        // prompt (a deleted custom one, a challenge link's), and the
+        // subtraction then disagreed with the list the chip opens.
+        case .unanswered: return allPrompts.count(where: { !answeredPromptIDs.contains($0.id) })
         case .myPrompts: return customCount
         }
     }
 
-    // MARK: - Active Filters Row
+    // MARK: - Search Scopes
 
-    @ViewBuilder
-    private var activeFiltersRow: some View {
-        if let difficulty = selectedDifficulty {
-            HStack(spacing: 6) {
-                activeFilterTag(
-                    icon: difficultyIcon(difficulty),
-                    label: difficulty.displayName,
-                    color: difficulty.color
-                ) {
-                    withAnimation { selectedDifficulty = nil }
+    /// The open category and difficulty ride inside the search field as
+    /// removable pills (see `SearchScope`), and the count rides in its
+    /// placeholder, so opening a category adds no rows above its prompts.
+    private var searchScopes: [SearchScope] {
+        var scopes: [SearchScope] = []
+        if let category = selectedCategory {
+            scopes.append(SearchScope(
+                title: category.shortName,
+                icon: category.iconName,
+                tint: category.color,
+                removeLabel: "Shows all categories"
+            ) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    selectedCategory = nil
                 }
-                Spacer(minLength: 0)
-            }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            })
         }
+        if let difficulty = selectedDifficulty {
+            scopes.append(SearchScope(
+                title: difficulty.displayName,
+                tint: difficulty.color,
+                removeLabel: "Shows every difficulty"
+            ) {
+                withAnimation { selectedDifficulty = nil }
+            })
+        }
+        return scopes
     }
 
-    private func activeFilterTag(icon: String, label: String, color: Color, onRemove: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.light()
-            onRemove()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 9, weight: .semibold))
-                Text(label)
-                    .font(.caption2.weight(.medium))
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.secondary)
-            }
-            .foregroundStyle(color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background {
-                Capsule().fill(color.opacity(0.12))
-            }
-        }
-        .buttonStyle(.plain)
+    /// A pill already names the scope, so the placeholder shrinks to fit
+    /// beside it; a filtered list without one carries its count here - the
+    /// count a "40 prompts" label used to take a row for.
+    private func searchPrompt(count: Int) -> String {
+        if !searchScopes.isEmpty { return "Search" }
+        return selectedFilter != .all
+            ? "Search \(count) prompt\(count == 1 ? "" : "s")…"
+            : "Search prompts…"
     }
 
     // MARK: - Landing Content (Category-First)
 
     @ViewBuilder
     private func landingContent(_ prompts: [Prompt]) -> some View {
-        spinTheWheelCard
-
-        if selectedFilter == .all {
-            categoriesSection
-        } else {
-            HStack { countLabel(prompts); Spacer(minLength: 0) }
+        if isNarrowed {
+            // A search shows results and nothing else. The wheel card steps
+            // aside: it spins every difficulty and ignores the query, and it
+            // pushed the first result below the fold.
             promptResults(prompts)
-        }
-    }
+        } else {
+            spinTheWheelCard
 
-    private func countLabel(_ prompts: [Prompt]) -> some View {
-        Text("\(prompts.count) prompt\(prompts.count == 1 ? "" : "s")")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            if selectedFilter == .all {
+                categoriesSection
+            } else {
+                promptResults(prompts)
+            }
+        }
     }
 
     // MARK: - Spin the Wheel Card
@@ -323,39 +354,50 @@ extension AllPromptsView {
             Haptics.medium()
             showingPromptWheel = true
         } label: {
-            FeaturedGlassCard(cornerRadius: 20, padding: 16) {
-                HStack(spacing: 14) {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
+            GlassCard(tint: AppColors.primary.opacity(0.06), padding: 0) {
+                VStack(spacing: 0) {
+                    PromptWheelTeaser()
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Spin the Wheel")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Text("Discover a random prompt")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Spin the wheel")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Text("Land on a random prompt")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        // Secondary: this card is a door, not the page's one
+                        // white primary. On the card it paints a capsule
+                        // rather than stacking glass on glass.
+                        GlassButtonLabel(
+                            title: "Spin",
+                            icon: "arrow.trianglehead.2.clockwise.rotate.90",
+                            style: .secondary,
+                            size: .small
+                        )
                     }
-
-                    Spacer(minLength: 0)
-
-                    GlassButtonLabel(
-                        title: "Spin",
-                        style: .primary,
-                        size: .small
-                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
+                .clipShape(.rect(cornerRadius: 20))
             }
         }
         .buttonStyle(GlassPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spin the wheel")
+        .accessibilityHint("Opens the prompt wheel to land on a random prompt")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Categories Grid
 
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("Categories", icon: "square.grid.2x2.fill")
+            GlassSectionHeader("Categories")
 
             let columns = [
                 GridItem(.flexible(), spacing: 12),
@@ -384,14 +426,16 @@ extension AllPromptsView {
             GlassCard(cornerRadius: 16, padding: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Image(systemName: category.iconName)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(color)
+                        // The identity chip the Tools grid wears. Its fixed
+                        // circle also keeps a flat bolt and a tall pair of
+                        // bubbles from giving neighbouring cards two heights.
+                        IconChip(icon: category.iconName, tint: color, size: 28)
 
                         Spacer(minLength: 0)
 
                         Text("\(done)/\(total)")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .font(.system(.caption2, design: .rounded, weight: .semibold))
+                            .monospacedDigit()
                             .foregroundStyle(.secondary)
                             .contentTransition(.numericText())
                     }
@@ -413,81 +457,118 @@ extension AllPromptsView {
             }
         }
         .buttonStyle(GlassPressStyle())
+        // VoiceOver read the glyph, then "3/40", then the name.
+        .accessibilityLabel(category.displayName)
+        .accessibilityValue("\(done) of \(total) answered")
+        .accessibilityHint("Shows this category's prompts")
     }
 
     // MARK: - Category Detail Content
 
-    @ViewBuilder
     private func categoryDetailContent(_ prompts: [Prompt]) -> some View {
-        HStack(spacing: 10) {
-            backToCategoriesButton
-            countLabel(prompts)
-            Spacer(minLength: 0)
-        }
-        activeFiltersRow
         promptResults(prompts)
     }
 
+    /// One plate of rows per category, under that category's name - except
+    /// inside a category, where the pill in the field already names it. The
+    /// outer stack stays lazy, so Unanswered (most of the library) builds
+    /// only the categories on screen.
     @ViewBuilder
     private func promptResults(_ prompts: [Prompt]) -> some View {
         if prompts.isEmpty {
             emptyState
         } else {
-            LazyVStack(spacing: 12) {
-                listSection(prompts: prompts)
-            }
-        }
-    }
+            LazyVStack(alignment: .leading, spacing: AppLayout.chapterSpacing) {
+                ForEach(categoryGroups(prompts), id: \.category) { group in
+                    VStack(alignment: .leading, spacing: 10) {
+                        if selectedCategory == nil {
+                            GlassSectionHeader(PromptCategory(rawValue: group.category)?.displayName ?? group.category)
+                        }
 
-    private var backToCategoriesButton: some View {
-        GlassButton(
-            title: "All categories",
-            icon: "chevron.left",
-            style: .secondary,
-            size: .small
-        ) {
-            Haptics.light()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                selectedCategory = nil
-            }
-        }
-        .accessibilityHint("Returns to the category list")
-    }
-
-    // MARK: - Prompt List & Grid
-
-    @ViewBuilder
-    private func listSection(prompts: [Prompt]) -> some View {
-        ForEach(prompts, id: \.id) { prompt in
-            PromptRow(
-                prompt: prompt,
-                isAnswered: answeredPromptIDs.contains(prompt.id),
-                onTap: onSelectPrompt.map { selectAction in
-                    {
-                        Haptics.medium()
-                        selectAction(prompt)
+                        GlassRowGroup(dividerInset: 14) {
+                            ForEach(group.prompts, id: \.id) { prompt in
+                                promptRow(prompt)
+                            }
+                        }
                     }
-                },
-                onDelete: prompt.isUserCreated ? {
-                    promptToDelete = prompt
-                } : nil
-            )
+                }
+            }
         }
+    }
+
+    /// Runs of one category, in list order - `filteredPrompts` sorts by it.
+    private func categoryGroups(_ prompts: [Prompt]) -> [(category: String, prompts: [Prompt])] {
+        var groups: [(category: String, prompts: [Prompt])] = []
+        for prompt in prompts {
+            if groups.last?.category == prompt.category {
+                groups[groups.count - 1].prompts.append(prompt)
+            } else {
+                groups.append((category: prompt.category, prompts: [prompt]))
+            }
+        }
+        return groups
+    }
+
+    // MARK: - Prompt Rows
+
+    private func promptRow(_ prompt: Prompt) -> some View {
+        PromptRow(
+            prompt: prompt,
+            isAnswered: answeredPromptIDs.contains(prompt.id),
+            onTap: onSelectPrompt.map { selectAction in
+                {
+                    Haptics.medium()
+                    selectAction(prompt)
+                }
+            },
+            onDelete: prompt.isUserCreated ? {
+                promptToDelete = prompt
+            } : nil
+        )
     }
 
     // MARK: - Empty State
 
+    /// Each empty list says why and offers the way out: add a first prompt,
+    /// or clear the query and difficulty that emptied it. "No custom prompts
+    /// yet" used to show whenever My prompts came up empty, even when a
+    /// search was hiding the ones you had.
+    @ViewBuilder
     private var emptyState: some View {
-        EmptyStateCard(
-            icon: selectedFilter == .myPrompts ? "text.badge.plus" : "magnifyingglass",
-            title: selectedFilter == .myPrompts ? "No custom prompts yet" : "No prompts found",
-            message: selectedFilter == .myPrompts
-                ? "Create your first custom prompt to get started."
-                : "Try adjusting your search or filters.",
-            buttonTitle: selectedFilter == .myPrompts ? "Add prompt" : nil,
-            buttonAction: selectedFilter == .myPrompts ? { showingAddPrompt = true } : nil
-        )
+        Group {
+            if selectedFilter == .myPrompts && customCount == 0 {
+                EmptyStateCard(
+                    icon: "text.badge.plus",
+                    title: "No custom prompts yet",
+                    message: "Create your first custom prompt to get started.",
+                    buttonTitle: "Add prompt",
+                    buttonAction: { showingAddPrompt = true }
+                )
+            } else if isNarrowed {
+                EmptyStateCard(
+                    icon: "magnifyingglass",
+                    title: "No prompts found",
+                    message: "Nothing here matches your search or difficulty.",
+                    buttonTitle: "Clear filters",
+                    buttonAction: { clearFilters() }
+                )
+            } else {
+                EmptyStateCard(
+                    icon: "checkmark.circle",
+                    title: "Nothing left unanswered",
+                    message: "Every prompt here has a take. Pick any from All to go again."
+                )
+            }
+        }
         .padding(.top, 40)
+    }
+
+    private func clearFilters() {
+        Haptics.light()
+        withAnimation {
+            searchText = ""
+            selectedDifficulty = nil
+        }
     }
 
     // MARK: - Actions
@@ -551,36 +632,33 @@ extension AllPromptsView {
         case .success(let urls):
             guard let url = urls.first else { return }
             do {
-                let data = try csvService.parseCSV(from: url)
-                let existingTexts = Set(allPrompts.map { $0.text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
-                let (newItems, dupeCount) = deduplicateImport(data, existingTexts: existingTexts)
-                importConfirmation = ImportConfirmation(data: newItems, duplicateCount: dupeCount)
+                let parsed = try csvService.parseCSV(from: url)
+                let (newItems, dupeCount) = PromptCSVService.removingDuplicates(
+                    parsed.prompts,
+                    text: { $0.text },
+                    existing: allPrompts.map(\.text)
+                )
+                importConfirmation = ImportConfirmation(
+                    data: newItems,
+                    duplicateCount: dupeCount,
+                    skippedCount: parsed.skipped
+                )
             } catch {
-                errorMessage = error.localizedDescription
-                showingError = true
+                showImportError(error)
             }
         case .failure(let error):
-            errorMessage = error.localizedDescription
-            showingError = true
+            showImportError(error)
         }
     }
 
-    private func deduplicateImport(_ data: [PromptImportData], existingTexts: Set<String>) -> (items: [PromptImportData], duplicates: Int) {
-        var seen = existingTexts
-        var unique: [PromptImportData] = []
-        var dupeCount = 0
-
-        for item in data {
-            let normalized = item.text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            if seen.contains(normalized) {
-                dupeCount += 1
-            } else {
-                seen.insert(normalized)
-                unique.append(item)
-            }
-        }
-
-        return (unique, dupeCount)
+    /// Our own error already says how to fix the file. Anything else - a
+    /// file that is not UTF-8 text, one that would not open - gets the same
+    /// kind of instruction instead of a system sentence about encodings.
+    private func showImportError(_ error: Error) {
+        errorMessage = (error as? PromptCSVError)?.errorDescription
+            ?? "The file couldn't be read. Save it from your spreadsheet as CSV (UTF-8) and try again."
+        showingError = true
+        Haptics.warning()
     }
 
     private func confirmImport() {
@@ -598,13 +676,13 @@ extension AllPromptsView {
         try? modelContext.save()
         Haptics.success()
         importConfirmation = nil
-    }
-
-    private func difficultyIcon(_ difficulty: PromptDifficulty) -> String {
-        switch difficulty {
-        case .easy: return "hare"
-        case .medium: return "figure.walk"
-        case .hard: return "flame"
+        // Land on what was just added. Every import is a custom prompt, and a
+        // category, difficulty or query left over from before would hide some.
+        withAnimation {
+            searchText = ""
+            selectedCategory = nil
+            selectedDifficulty = nil
+            selectedFilter = .myPrompts
         }
     }
 
@@ -615,8 +693,29 @@ extension AllPromptsView {
 private struct ImportConfirmation {
     let data: [PromptImportData]
     let duplicateCount: Int
+    /// Rows the parser dropped for having no prompt text.
+    let skippedCount: Int
 
     var newCount: Int { data.count }
+
+    /// What will be added, then what will not and why.
+    var message: String {
+        var lines: [String] = []
+        if newCount == 0 {
+            lines.append(duplicateCount == 1
+                ? "That prompt is already in your library."
+                : "All \(duplicateCount) prompts are already in your library.")
+        } else {
+            lines.append("Add \(newCount) prompt\(newCount == 1 ? "" : "s") as custom prompts?")
+            if duplicateCount > 0 {
+                lines.append("\(duplicateCount) already in your library will be skipped.")
+            }
+        }
+        if skippedCount > 0 {
+            lines.append("\(skippedCount) row\(skippedCount == 1 ? "" : "s") had no prompt text.")
+        }
+        return lines.joined(separator: " ")
+    }
 }
 
 // MARK: - Prompt Filter Enum
@@ -632,7 +731,7 @@ enum PromptFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return "All"
         case .unanswered: return "Unanswered"
-        case .myPrompts: return "My Prompts"
+        case .myPrompts: return "My prompts"
         }
     }
 
@@ -647,6 +746,12 @@ enum PromptFilter: String, CaseIterable, Identifiable {
 
 // MARK: - Prompt Row
 
+/// One prompt as a row on its category's `GlassRowGroup`. It draws no plate:
+/// it pads itself and lights edge to edge on press (`RowPressStyle`); the
+/// group owns the surface, the hairlines and the clip. It was a `GlassCard`
+/// of its own with a category-coloured stripe, a column of plates that
+/// pressed with no feedback at all. The category is not on the row either -
+/// the group's header or the field's pill names it.
 struct PromptRow: View {
     let prompt: Prompt
     var isAnswered: Bool = false
@@ -654,49 +759,53 @@ struct PromptRow: View {
     var onDelete: (() -> Void)?
 
     var body: some View {
-        let content = GlassCard(cornerRadius: 16, padding: 12) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(prompt.text)
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+        let content = HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(prompt.text)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
-                    PromptMetaLine(prompt: prompt)
-                }
-
-                Spacer(minLength: 4)
-
-                if isAnswered {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(AppColors.success)
-                } else if onTap != nil {
-                    Image(systemName: "mic.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
+                PromptMetaLine(prompt: prompt)
             }
-            .padding(.leading, 10)
-            .overlay(alignment: .leading) {
-                Capsule()
-                    .fill(categoryColor)
-                    .frame(width: 2.5)
-            }
+
+            Spacer(minLength: 4)
+
+            trailingGlyph
+                .accessibilityHidden(true)
         }
+        .padding(14)
+        .contentShape(.rect)
 
         if let onTap {
             Button(action: onTap) { content }
-                .buttonStyle(.plain)
+                .buttonStyle(RowPressStyle())
                 .contextMenu { contextMenuItems }
+                .accessibilityValue(isAnswered ? "Answered" : "")
+                .accessibilityHint("Starts a take with this prompt")
         } else {
             content
                 .contextMenu { contextMenuItems }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(isAnswered ? "Answered" : "")
+        }
+    }
+
+    @ViewBuilder
+    private var trailingGlyph: some View {
+        if isAnswered {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(AppColors.success)
+        } else if onTap != nil {
+            Image(systemName: "mic.fill")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } else {
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -716,9 +825,46 @@ struct PromptRow: View {
             }
         }
     }
+}
 
-    private var categoryColor: Color {
-        PromptCategory(rawValue: prompt.category)?.color ?? AppColors.primary
+// MARK: - Prompt Wheel Teaser
+
+/// The crown of the prompt wheel, drawn into the card that opens it: the same
+/// `ArcDial`, display-only, in the wheel's own category order, so the Library
+/// shows what Spin does before you press it. It turns two stops the first
+/// time it appears - the way a wheel settles - and then holds still.
+private struct PromptWheelTeaser: View {
+    @State private var position: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var categories: [PromptCategory] { PromptWheelViewModel.categoryOrder }
+
+    var body: some View {
+        ArcDial(
+            count: categories.count,
+            position: position,
+            wraps: true,
+            step: 30,
+            isInteractive: false,
+            playsDetents: false,
+            height: 150,
+            tint: { categories[$0].color },
+            glyph: { index in
+                Image(systemName: categories[index].iconName)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(categories[index].color)
+                    .frame(width: 32, height: 32)
+            },
+            hub: { EmptyView() }
+        )
+        // Lift the crown toward the card's top edge; the band above the
+        // marker is empty at this height.
+        .padding(.top, -14)
+        .accessibilityHidden(true)
+        .onAppear {
+            guard !reduceMotion, position == 0 else { return }
+            withAnimation(.spring(duration: 1.4, bounce: 0.2).delay(0.25)) { position = 2 }
+        }
     }
 }
 
@@ -729,11 +875,6 @@ private struct PromptMetaLine: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(PromptCategory(rawValue: prompt.category)?.shortName ?? prompt.category)
-                .lineLimit(1)
-
-            dot
-
             Text(prompt.difficulty.displayName)
                 .foregroundStyle(AppColors.difficultyColor(prompt.difficulty))
 
@@ -772,6 +913,19 @@ extension PromptCategory {
         case .elevatorPitch: return "Pitch"
         case .conversationStarters: return "Conversation"
         case .describeExplain: return "Describe"
+        }
+    }
+}
+
+// MARK: - Difficulty Icon
+
+extension PromptDifficulty {
+    /// The difficulty's glyph in the filter menu and on the add forms' chips.
+    var iconName: String {
+        switch self {
+        case .easy: return "hare"
+        case .medium: return "figure.walk"
+        case .hard: return "flame"
         }
     }
 }

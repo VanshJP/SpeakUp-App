@@ -65,7 +65,9 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
                 item(for: section)
             }
         }
-        .padding(framed ? 6 : 0)
+        // 4 + 36 + 4: the framed picker lands on the 44pt hit target rather
+        // than ~56pt - the pinned row Library and History scroll under.
+        .padding(framed ? 4 : 0)
     }
 
     @ViewBuilder
@@ -118,8 +120,8 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
         case (.compact, _): return 12
         }
     }
-    private var verticalPadding: CGFloat { style == .regular ? 10 : 6 }
-    private var pillCornerRadius: CGFloat { style == .regular ? 14 : 12 }
+    private var verticalPadding: CGFloat { style == .regular ? 8 : 6 }
+    private var pillCornerRadius: CGFloat { style == .regular ? 16 : 12 }
     private var iconFont: Font { style == .regular ? .system(size: 13, weight: .semibold) : .caption2.weight(.semibold) }
     private var labelFont: Font { style == .regular ? .subheadline.weight(.semibold) : .caption.weight(.semibold) }
 }

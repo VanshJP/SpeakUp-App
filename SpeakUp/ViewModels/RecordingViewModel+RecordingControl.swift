@@ -21,7 +21,7 @@ extension RecordingViewModel {
             startAudioLevelMonitoring()
 
             // Start live filler counting after the recorder owns the mic route.
-            // Immediate dual-start (esp. "Start Now" mid-countdown) races the
+            // Immediate dual-start (esp. "Start now" mid-countdown) races the
             // session into a 0 Hz format and aborts inside AVAudioEngine.
             liveTranscriptionService.fillerConfig = fillerConfig
             let authorized = await liveTranscriptionService.requestAuthorization()

@@ -7,97 +7,87 @@ struct BeforeAfterReplayView: View {
     @Environment(AudioService.self) private var audioService
     @Query private var userSettings: [UserSettings]
     @State private var viewModel = ProgressReplayViewModel()
-    @State private var playingEarly = false
-    @State private var playingLatest = false
+    /// The take that owns the player. Whether it is sounding right now is
+    /// `audioService.isPlaying`: `AudioService.play` returns as soon as
+    /// playback starts, so a flag reset after awaiting it flipped back at once
+    /// and left no way to pause.
+    @State private var activeSide: Side?
+
+    private enum Side {
+        case first, latest
+
+        var name: String {
+            switch self {
+            case .first: return "first take"
+            case .latest: return "latest take"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppBackground()
+            PageScrollView {
+                VStack(spacing: 20) {
+                    if viewModel.isLoaded {
+                        summaryLine
 
-                PageScrollView {
-                    VStack(spacing: 20) {
-                        if viewModel.isLoaded {
-                            VStack(spacing: 8) {
-                                Text("Then vs Now")
-                                    .font(.title.weight(.bold))
+                        recordingCard(
+                            title: "First take",
+                            snapshot: viewModel.earliestSnapshot,
+                            side: .first
+                        )
 
-                                if viewModel.scoreImprovement > 0 {
-                                    Text("+\(viewModel.scoreImprovement) points improvement!")
+                        changeMarker
+
+                        recordingCard(
+                            title: "Latest take",
+                            snapshot: viewModel.latestSnapshot,
+                            side: .latest
+                        )
+
+                        if let card = viewModel.progressCard {
+                            shareSection(card)
+                        }
+
+                        if viewModel.scoreImprovement > 20 {
+                            FeaturedGlassCard {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "star.fill")
+                                        .font(.title)
+                                        .foregroundStyle(AppColors.warning)
+                                        .accessibilityHidden(true)
+
+                                    Text("Big progress")
                                         .font(.headline)
-                                        .foregroundStyle(AppColors.success)
-                                } else if viewModel.scoreImprovement < 0 {
-                                    Text("Keep practicing, you've got this!")
+
+                                    Text("You've improved by \(viewModel.scoreImprovement) points since your first take.")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
                                 }
+                                .frame(maxWidth: .infinity)
                             }
-                            .padding(.top)
-
-                            recordingCard(
-                                title: "Your First Session",
-                                snapshot: viewModel.earliestSnapshot,
-                                isPlaying: playingEarly,
-                                onPlay: { playEarly() }
-                            )
-
-                            VStack(spacing: 4) {
-                                Image(systemName: "arrow.down")
-                                    .font(.title2.weight(.bold))
-                                    .foregroundStyle(AppColors.primary)
-
-                                if viewModel.scoreImprovement != 0 {
-                                    Text(viewModel.scoreImprovement >= 0 ? "+\(viewModel.scoreImprovement)" : "\(viewModel.scoreImprovement)")
-                                        .font(.title3.weight(.bold))
-                                        .foregroundStyle(viewModel.scoreImprovement >= 0 ? AppColors.success : AppColors.error)
-                                }
-                            }
-                            .padding(.vertical, 4)
-
-                            recordingCard(
-                                title: "Your Latest Session",
-                                snapshot: viewModel.latestSnapshot,
-                                isPlaying: playingLatest,
-                                onPlay: { playLatest() }
-                            )
-
-                            if let card = viewModel.progressCard {
-                                shareSection(card)
-                            }
-
-                            if viewModel.scoreImprovement > 20 {
-                                FeaturedGlassCard {
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "star.fill")
-                                            .font(.title)
-                                            .foregroundStyle(AppColors.warning)
-
-                                        Text("Amazing Progress!")
-                                            .font(.headline)
-
-                                        Text("You've improved by \(viewModel.scoreImprovement) points. That's incredible growth!")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                            .multilineTextAlignment(.center)
-                                    }
-                                }
-                            }
-                        } else {
-                            ContentUnavailableView(
-                                "Not Enough Data",
-                                systemImage: "chart.line.uptrend.xyaxis",
-                                description: Text("You need at least 2 analyzed recordings to compare progress.")
-                            )
                         }
+                    } else {
+                        ContentUnavailableView(
+                            "Not enough takes yet",
+                            systemImage: "chart.line.uptrend.xyaxis",
+                            description: Text("Listen back needs two analyzed takes to play side by side.")
+                        )
                     }
-                    .padding()
                 }
+                .padding(.top, 8)
+                .pageContentInsets()
             }
-            .navigationTitle("Your Progress")
+            .scrollIndicators(.hidden)
+            .appBackground(.subtle)
+            // Named like the Review tile that opens it; it used to be
+            // "Your Progress" over an in-page "Then vs Now".
+            .navigationTitle("Listen back")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .close) { dismiss() }
                 }
             }
             .onAppear {
@@ -108,6 +98,45 @@ struct BeforeAfterReplayView: View {
             }
         }
     }
+
+    // MARK: - Summary
+
+    private var summaryLine: some View {
+        let change = viewModel.scoreImprovement
+
+        return Text(
+            change > 0 ? "Up \(change) points since your first take."
+                : change < 0 ? "Down \(-change) points since your first take."
+                : "Level with your first take."
+        )
+        .font(.subheadline.weight(.medium))
+        .monospacedDigit()
+        .foregroundStyle(change > 0 ? AppColors.success : .secondary)
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
+    }
+
+    private var changeMarker: some View {
+        let change = viewModel.scoreImprovement
+
+        return VStack(spacing: 4) {
+            Image(systemName: "arrow.down")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.secondary)
+
+            if change != 0 {
+                Text(change > 0 ? "+\(change)" : "\(change)")
+                    .font(.title3.weight(.bold))
+                    .monospacedDigit()
+                    // A drop is amber, never red.
+                    .foregroundStyle(change > 0 ? AppColors.success : AppColors.warning)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Share
 
     /// The card carries scores, dates, and a session count - never a
     /// transcript, a prompt, or audio. Said out loud here so the user does not
@@ -141,12 +170,14 @@ struct BeforeAfterReplayView: View {
         }
     }
 
-    private func recordingCard(title: String, snapshot: ReplaySessionSnapshot?, isPlaying: Bool, onPlay: @escaping () -> Void) -> some View {
-        GlassCard {
+    // MARK: - Take Card
+
+    private func recordingCard(title: String, snapshot: ReplaySessionSnapshot?, side: Side) -> some View {
+        let isPlaying = activeSide == side && audioService.isPlaying
+
+        return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text(title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(AppColors.primary)
+                GlassCardTitle(title)
 
                 if let snapshot {
                     HStack {
@@ -159,6 +190,7 @@ struct BeforeAfterReplayView: View {
                                 HStack(spacing: 4) {
                                     Text("\(score)")
                                         .font(.title2.weight(.bold))
+                                        .monospacedDigit()
                                         .foregroundStyle(AppColors.scoreColor(for: score))
                                     Text("/100")
                                         .font(.caption)
@@ -169,12 +201,17 @@ struct BeforeAfterReplayView: View {
 
                         Spacer()
 
-                        Button(action: onPlay) {
+                        Button {
+                            togglePlayback(side)
+                        } label: {
                             Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
                                 .font(.largeTitle)
                                 .foregroundStyle(AppColors.primary)
+                                .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+                                .contentShape(.rect)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GlassPressStyle())
+                        .accessibilityLabel(isPlaying ? "Pause \(side.name)" : "Play \(side.name)")
                     }
 
                     HStack(spacing: 16) {
@@ -191,31 +228,37 @@ struct BeforeAfterReplayView: View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.subheadline.weight(.bold))
+                .monospacedDigit()
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func playEarly() {
-        guard let url = viewModel.earliestRecording?.resolvedAudioURL ?? viewModel.earliestRecording?.resolvedVideoURL else { return }
-        audioService.stop()
-        playingLatest = false
-        playingEarly = true
-        Task {
-            try? await audioService.play(url: url)
-            playingEarly = false
-        }
-    }
+    // MARK: - Playback
 
-    private func playLatest() {
-        guard let url = viewModel.latestRecording?.resolvedAudioURL ?? viewModel.latestRecording?.resolvedVideoURL else { return }
-        audioService.stop()
-        playingEarly = false
-        playingLatest = true
+    /// Play, pause, or resume one side. The other side stops first, so the
+    /// two takes never talk over each other.
+    private func togglePlayback(_ side: Side) {
+        let recording = side == .first ? viewModel.earliestRecording : viewModel.latestRecording
+        guard let url = recording?.resolvedAudioURL ?? recording?.resolvedVideoURL else { return }
+        Haptics.light()
+
+        if activeSide == side, audioService.isPlaying {
+            audioService.pause()
+            return
+        }
+
+        // Resume where this side paused (0 once it has finished); the other
+        // side always starts from the top.
+        let resumeAt = activeSide == side ? audioService.currentPlaybackTime : 0
+        if activeSide != side {
+            audioService.stop()
+        }
+        activeSide = side
+
         Task {
-            try? await audioService.play(url: url)
-            playingLatest = false
+            try? await audioService.play(url: url, startingAt: resumeAt)
         }
     }
 }

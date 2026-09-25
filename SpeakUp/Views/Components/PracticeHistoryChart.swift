@@ -14,19 +14,16 @@ struct PracticeHistoryChart: View {
         } else {
             GlassCard(tint: accentColor.opacity(0.04)) {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Score Trend")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                    GlassCardTitle("Score trend") {
                         if let latest = dataPoints.last, let first = dataPoints.first {
                             let delta = latest.score - first.score
                             HStack(spacing: 3) {
-                                Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                Text(delta >= 0 ? "+\(delta)" : "\(delta)")
+                                Image(systemName: delta > 0 ? "arrow.up.right" : delta < 0 ? "arrow.down.right" : "arrow.right")
+                                Text(delta > 0 ? "+\(delta)" : "\(delta)")
+                                    .monospacedDigit()
                             }
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(delta >= 0 ? AppColors.success : AppColors.warning)
+                            .foregroundStyle(delta > 0 ? AppColors.success : delta < 0 ? AppColors.warning : .secondary)
                         }
                     }
 
@@ -165,8 +162,8 @@ struct PracticeMetricsRow: View {
 
                 metricItem(
                     icon: "chart.line.uptrend.xyaxis",
-                    value: stats.avgScore.map { "\($0)" } ?? "--",
-                    label: "Avg Score",
+                    value: stats.avgScore.map { "\($0)" } ?? "–",
+                    label: "Avg score",
                     color: stats.avgScore.map { AppColors.scoreColor(for: $0) } ?? .secondary
                 )
 
@@ -174,7 +171,7 @@ struct PracticeMetricsRow: View {
 
                 metricItem(
                     icon: "flame.fill",
-                    value: stats.bestScore.map { "\($0)" } ?? "--",
+                    value: stats.bestScore.map { "\($0)" } ?? "–",
                     label: "Best",
                     color: stats.bestScore.map { AppColors.scoreColor(for: $0) } ?? .secondary
                 )
@@ -184,7 +181,7 @@ struct PracticeMetricsRow: View {
                 metricItem(
                     icon: "clock",
                     value: stats.totalDuration,
-                    label: "Total Time",
+                    label: "Total time",
                     color: AppColors.info
                 )
             }
@@ -203,11 +200,13 @@ struct PracticeMetricsRow: View {
                 .font(.caption)
                 .foregroundStyle(color)
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.statValue)
                 .foregroundStyle(.white)
             Text(label)
-                .font(.system(size: 9))
+                .font(.caption2)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
     }

@@ -22,6 +22,9 @@ struct ScoreRevealView: View {
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// With VoiceOver on, the reveal waits for a double-tap instead of moving
+    /// on by itself: the timed hand-off left before the summary was read.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @State private var counted = false
     @State private var landed = false
@@ -108,6 +111,7 @@ struct ScoreRevealView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onDismiss() }
     }
 
     // MARK: - Subviews
@@ -271,7 +275,9 @@ struct ScoreRevealView: View {
             streakLit = true
             showHint = true
             bandHaptic()
+            guard !voiceOverEnabled else { return }
             try? await Task.sleep(for: .seconds(2.4))
+            guard !Task.isCancelled else { return }
             onDismiss()
             return
         }
@@ -321,6 +327,7 @@ struct ScoreRevealView: View {
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.4)) { showHint = true }
 
+        guard !voiceOverEnabled else { return }
         var linger = 1400
         if personalBestLabel != nil { linger += 500 }
         if streakDay != nil { linger += 600 }

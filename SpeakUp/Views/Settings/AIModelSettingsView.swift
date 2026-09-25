@@ -5,6 +5,8 @@ struct AIModelSettingsView: View {
     @Environment(LLMService.self) private var llmService
     @Query private var settingsList: [UserSettings]
     private var settings: UserSettings? { settingsList.first }
+    /// Deleting throws away a download of up to 4 GB, so it asks first.
+    @State private var confirmingDelete = false
 
     var body: some View {
         ZStack {
@@ -26,6 +28,14 @@ struct AIModelSettingsView: View {
         }
         .navigationTitle("AI Features")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Delete the AI model?", isPresented: $confirmingDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                llmService.localLLM.deleteModel()
+            }
+        } message: {
+            Text("Features that use it stop until you download it again (\(llmService.localLLM.approximateModelSize)).")
+        }
     }
 
     // MARK: - Dictation Card
@@ -36,11 +46,11 @@ struct AIModelSettingsView: View {
                 cardHeader(
                     icon: "waveform",
                     tint: AppColors.primary,
-                    title: "Auto-format Dictation",
+                    title: "Auto-format dictation",
                     subtitle: "Clean up punctuation, capitalization, and paragraphs when you dictate into a note."
                 )
 
-                Toggle("", isOn: Binding(
+                Toggle("Auto-format dictation", isOn: Binding(
                     get: { settings?.autoFormatDictation ?? true },
                     set: { settings?.autoFormatDictation = $0 }
                 ))
@@ -93,12 +103,7 @@ struct AIModelSettingsView: View {
                     subtitle: "Built-in on-device model"
                 )
 
-                Text("Active")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(AppColors.success))
+                StatusPill(text: "Active", color: AppColors.success, glyph: .dot)
             }
         }
     }
@@ -112,7 +117,7 @@ struct AIModelSettingsView: View {
                     cardHeader(
                         icon: "arrow.down.circle",
                         tint: AppColors.categoryBrandBright,
-                        title: "Local AI Model",
+                        title: "Local AI model",
                         subtitle: "\(llmService.localLLM.modelDisplayName) • \(llmService.localLLM.approximateModelSize)"
                     )
 
@@ -144,7 +149,7 @@ struct AIModelSettingsView: View {
         @Bindable var bindable = llmService
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Use Local Model for AI Features")
+                Text("Use the local model")
                     .font(.subheadline.weight(.semibold))
                 Text("Route coaching insights and coherence scoring through the on-device Gemma model instead of Apple Intelligence.")
                     .font(.caption)
@@ -153,7 +158,7 @@ struct AIModelSettingsView: View {
 
             Spacer()
 
-            Toggle("", isOn: $bindable.preferLocalLLM)
+            Toggle("Use the local model", isOn: $bindable.preferLocalLLM)
                 .labelsHidden()
                 .tint(AppColors.primary)
         }
@@ -163,9 +168,8 @@ struct AIModelSettingsView: View {
     private var modelTierSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("Model Tier")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                Text("Model tier")
+                    .eyebrowStyle()
 
                 Spacer()
 
@@ -177,7 +181,7 @@ struct AIModelSettingsView: View {
             }
 
             Picker(
-                "Model Tier",
+                "Model tier",
                 selection: Binding(
                     get: { llmService.localLLM.selectedProfile },
                     set: { profile in
@@ -199,47 +203,21 @@ struct AIModelSettingsView: View {
     private var localModelStatusBadge: some View {
         switch llmService.localLLM.modelState {
         case .ready:
-            Text(llmService.appleIntelligenceAvailable ? "Standby" : "Active")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(llmService.appleIntelligenceAvailable ? AppColors.warning : AppColors.success))
+            if llmService.appleIntelligenceAvailable {
+                StatusPill(text: "Standby", color: AppColors.warning, glyph: .dot)
+            } else {
+                StatusPill(text: "Active", color: AppColors.success, glyph: .dot)
+            }
         case .loading:
-            Text("Loading")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(AppColors.info))
+            StatusPill(text: "Loading", color: AppColors.info, glyph: .dot)
         case .downloading:
-            Text("Downloading")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(AppColors.info))
+            StatusPill(text: "Downloading", color: AppColors.info, glyph: .dot)
         case .downloaded:
-            Text("Downloaded")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.white.opacity(0.1)))
+            StatusPill(text: "Downloaded", color: .secondary)
         case .error:
-            Text("Error")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(AppColors.error))
+            StatusPill(text: "Error", color: AppColors.error, glyph: .dot)
         case .notDownloaded:
-            Text("Not Installed")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.white.opacity(0.1)))
+            StatusPill(text: "Not installed", color: .secondary)
         }
     }
 
@@ -264,7 +242,7 @@ struct AIModelSettingsView: View {
 
                 GlassButton(title: "Delete", icon: "trash", style: .danger, fullWidth: true) {
                     Haptics.warning()
-                    llmService.localLLM.deleteModel()
+                    confirmingDelete = true
                 }
             }
 
@@ -278,7 +256,7 @@ struct AIModelSettingsView: View {
             HStack(spacing: 12) {
                 VoiceLoader()
                     .foregroundStyle(AppColors.primary)
-                Text("Loading model into memory...")
+                Text("Loading model into memory…")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -292,7 +270,7 @@ struct AIModelSettingsView: View {
 
                 GlassButton(title: "Delete", icon: "trash", style: .danger, fullWidth: true) {
                     Haptics.warning()
-                    llmService.localLLM.deleteModel()
+                    confirmingDelete = true
                 }
             }
 
@@ -355,7 +333,7 @@ struct AIModelSettingsView: View {
             cardHeader(
                 icon: "lock.shield",
                 tint: AppColors.success,
-                title: "100% On-Device",
+                title: "100% on-device",
                 subtitle: "All AI processing happens privately on your device. No data is sent to any server."
             )
         }
@@ -399,11 +377,17 @@ private struct ModelDownloadProgress: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Cancel") {
+                Button {
+                    Haptics.light()
                     localLLM.cancelDownload()
+                } label: {
+                    Text("Cancel download")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(minHeight: AppLayout.minHitTarget)
+                        .contentShape(Rectangle())
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(AppColors.error)
+                .buttonStyle(GlassPressStyle())
             }
         }
     }

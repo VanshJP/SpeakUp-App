@@ -21,7 +21,7 @@ struct WarmUpListView: View {
             if let story = sourceStory {
                 SourceStoryBanner(
                     eyebrow: "Warming up for",
-                    title: story.title.isEmpty ? "Untitled note" : story.title
+                    title: story.title.isEmpty ? "Untitled story" : story.title
                 )
             }
 
@@ -64,6 +64,7 @@ struct WarmUpListView: View {
             tag: exercise.category.displayName,
             accessory: .play
         ) {
+            Haptics.medium()
             viewModel.selectExercise(exercise)
             showingExercise = true
         }

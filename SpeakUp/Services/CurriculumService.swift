@@ -67,6 +67,18 @@ class CurriculumService {
 
     @MainActor
     func completeActivity(_ activityId: String, context: ModelContext) {
+        guard progress != nil else { return }
+        recordActivityCompletion(activityId)
+        try? context.save()
+        refreshAutoCompletions(context: context)
+    }
+
+    /// Marks one activity done and settles what that finishes: its lesson,
+    /// and the current-lesson pointer, which moves on once, to the next open
+    /// lesson. This is the only thing that advances the pointer. The lesson
+    /// page's "Next lesson" used to advance it a second time and skip a lesson.
+    /// No I/O, so the rule is testable without a store.
+    func recordActivityCompletion(_ activityId: String) {
         guard let progress else { return }
         if !progress.completedActivityIds.contains(activityId) {
             progress.completedActivityIds.append(activityId)
@@ -75,29 +87,6 @@ class CurriculumService {
         // The lesson this activity finishes completes now; what the history
         // scan infers lands a moment later.
         _ = synchronizeLessonCompletionAndProgress(progress: progress)
-        try? context.save()
-        refreshAutoCompletions(context: context)
-    }
-
-    @MainActor
-    func advanceToNextLesson(context: ModelContext) {
-        guard let progress, let currentPhase = currentPhase else { return }
-
-        let lessons = currentPhase.lessons
-        if let currentIndex = lessons.firstIndex(where: { $0.id == progress.currentLessonId }),
-           currentIndex + 1 < lessons.count {
-            progress.currentLessonId = lessons[currentIndex + 1].id
-        } else {
-            // Move to next phase
-            if let phaseIndex = phases.firstIndex(where: { $0.id == currentPhase.id }),
-               phaseIndex + 1 < phases.count {
-                let nextPhase = phases[phaseIndex + 1]
-                progress.currentPhaseId = nextPhase.id
-                progress.currentLessonId = nextPhase.lessons.first?.id ?? ""
-            }
-        }
-
-        try? context.save()
     }
 
     // MARK: - Auto Completion

@@ -65,7 +65,7 @@ struct RoutineCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader(TodayHomeModule.routine.title, icon: TodayHomeModule.routine.icon) {
+            GlassSectionHeader(TodayHomeModule.routine.title) {
                 headerAccessory
             }
 
@@ -106,7 +106,7 @@ struct RoutineCard: View {
                     .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
             // A 44pt target that lays out at the title's height, so this header
             // lines up with "Today's prompt" and "Prep tools" below it.
             .padding(-11)
@@ -220,9 +220,10 @@ struct RoutineCard: View {
 
 /// The bar that appears the moment a routine step finishes, naming the next one.
 ///
-/// It lives over the tab surface rather than inside the screen that finished,
+/// It lives on the tab surface rather than inside the screen that finished,
 /// because the screen that finished is a sheet and it is about to close. Set
 /// while the sheet is still up, it is simply already there when the sheet goes.
+/// `ContentView` hosts it in each tab's bottom `safeAreaBar`, above the tab bar.
 struct RoutineHandoffBar: View {
     let handoff: PracticeRoutineService.Handoff
     let onTake: () -> Void
@@ -234,7 +235,9 @@ struct RoutineHandoffBar: View {
                 IconChip(icon: handoff.next.icon, tint: handoff.next.tint, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(handoff.finished.title) done. Next up.")
+                    // Not "<step> done": step titles are imperatives, so that
+                    // read "Run a drill done" and "Settle nerves done".
+                    Text("Done. Next up:")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(handoff.next.title)
@@ -244,9 +247,11 @@ struct RoutineHandoffBar: View {
 
                 Spacer(minLength: 8)
 
-                // Same verb as the routine card's button, so the bar and the
-                // card read as the same next step.
-                GlassButton(title: handoff.next.verb, style: .primary, size: .small) {
+                // Same verb and capsule as the routine card's button, so the
+                // bar and the card read as the same next step. Secondary:
+                // the bar floats over Today, where Start speaking is the one
+                // white primary.
+                GlassButton(title: handoff.next.verb, style: .secondary, size: .small) {
                     Haptics.medium()
                     onTake()
                 }

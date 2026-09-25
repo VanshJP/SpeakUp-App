@@ -33,109 +33,122 @@ class PromptCSVService {
 
     // MARK: - Import
 
-    func parseCSV(from url: URL) throws -> [PromptImportData] {
+    /// The file's prompts, and how many rows were skipped for having no
+    /// prompt text. One bad row used to abort the whole file.
+    func parseCSV(from url: URL) throws -> (prompts: [PromptImportData], skipped: Int) {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
 
         let content = try String(contentsOf: url, encoding: .utf8)
-        let lines = content.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let result = Self.parse(content)
+        guard !result.prompts.isEmpty else { throw PromptCSVError.emptyFile }
+        return result
+    }
 
-        guard lines.count > 1 else { throw PromptCSVError.emptyFile }
-
-        var results: [PromptImportData] = []
-
-        for (index, line) in lines.dropFirst().enumerated() {
-            let row = index + 2 // 1-indexed, skip header
-            let fields = parseCSVLine(line)
-
-            guard fields.count >= 1 else {
-                throw PromptCSVError.parseError(row: row, detail: "Empty row")
-            }
-
-            let text = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else {
-                throw PromptCSVError.parseError(row: row, detail: "Empty prompt text")
-            }
-
-            let category: String
-            if fields.count >= 2 {
-                let raw = fields[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                // Validate category or default to Personal Growth
-                if PromptCategory(rawValue: raw) != nil {
-                    category = raw
-                } else {
-                    category = PromptCategory.personalGrowth.rawValue
-                }
-            } else {
-                category = PromptCategory.personalGrowth.rawValue
-            }
-
-            let difficulty: PromptDifficulty
-            if fields.count >= 3 {
-                let raw = fields[2].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                difficulty = PromptDifficulty(rawValue: raw) ?? .medium
-            } else {
-                difficulty = .medium
-            }
-
-            results.append(PromptImportData(text: text, category: category, difficulty: difficulty))
+    /// `text,category,difficulty` rows under a header row. Only the text is
+    /// required: an unknown category files under Personal Growth, an unknown
+    /// difficulty reads as medium, and a row with no text is skipped and
+    /// counted rather than failing the import.
+    static func parse(_ content: String) -> (prompts: [PromptImportData], skipped: Int) {
+        let rows = records(in: content).filter { row in
+            row.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         }
 
-        guard !results.isEmpty else { throw PromptCSVError.emptyFile }
-        return results
+        var prompts: [PromptImportData] = []
+        var skipped = 0
+        for fields in rows.dropFirst() {
+            let text = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                skipped += 1
+                continue
+            }
+
+            let category = fields.count > 1
+                ? PromptCategory(rawValue: fields[1].trimmingCharacters(in: .whitespacesAndNewlines))
+                : nil
+            let difficulty = fields.count > 2
+                ? PromptDifficulty(rawValue: fields[2].trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+                : nil
+
+            prompts.append(PromptImportData(
+                text: text,
+                category: (category ?? .personalGrowth).rawValue,
+                difficulty: difficulty ?? .medium
+            ))
+        }
+        return (prompts, skipped)
+    }
+
+    // MARK: - Duplicates
+
+    /// `items` without any prompt the library already has or that repeats an
+    /// earlier item - case and surrounding whitespace do not make a prompt
+    /// new. CSV import and batch add share this one rule.
+    static func removingDuplicates<Item>(
+        _ items: [Item],
+        text: (Item) -> String,
+        existing: [String]
+    ) -> (unique: [Item], duplicates: Int) {
+        var seen = Set(existing.map(dedupeKey))
+        let unique = items.filter { seen.insert(dedupeKey(text($0))).inserted }
+        return (unique, items.count - unique.count)
+    }
+
+    private static func dedupeKey(_ text: String) -> String {
+        text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - CSV Helpers (RFC 4180)
 
     private func escapeCSVField(_ field: String) -> String {
-        if field.contains(",") || field.contains("\"") || field.contains("\n") {
+        if field.contains(",") || field.contains("\"") || field.contains(where: \.isNewline) {
             let escaped = field.replacingOccurrences(of: "\"", with: "\"\"")
             return "\"\(escaped)\""
         }
         return field
     }
 
-    private func parseCSVLine(_ line: String) -> [String] {
-        var fields: [String] = []
-        var current = ""
+    /// Splits CSV text into rows of fields. Quotes hold across lines: a comma
+    /// or a line break inside quotes belongs to the field, and `""` is a
+    /// literal quote. The file used to be split into lines first, so a prompt
+    /// exported with a line break came back as two broken rows.
+    static func records(in content: String) -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
         var inQuotes = false
-        var chars = line.makeIterator()
+        var previous: Character?
 
-        while let char = chars.next() {
+        for char in content {
             if inQuotes {
                 if char == "\"" {
-                    // Check for escaped quote
-                    if let next = chars.next() {
-                        if next == "\"" {
-                            current.append("\"")
-                        } else {
-                            inQuotes = false
-                            if next == "," {
-                                fields.append(current)
-                                current = ""
-                            } else {
-                                current.append(next)
-                            }
-                        }
-                    } else {
-                        inQuotes = false
-                    }
+                    inQuotes = false
                 } else {
-                    current.append(char)
+                    field.append(char)
                 }
+            } else if char == "\"" {
+                // Straight after a closing quote, a quote is an escaped one.
+                if previous == "\"" { field.append(char) }
+                inQuotes = true
+            } else if char == "," {
+                row.append(field)
+                field = ""
+            } else if char.isNewline {
+                row.append(field)
+                rows.append(row)
+                row = []
+                field = ""
             } else {
-                if char == "\"" {
-                    inQuotes = true
-                } else if char == "," {
-                    fields.append(current)
-                    current = ""
-                } else {
-                    current.append(char)
-                }
+                field.append(char)
             }
+            previous = char
         }
-        fields.append(current)
-        return fields
+
+        if !row.isEmpty || !field.isEmpty {
+            row.append(field)
+            rows.append(row)
+        }
+        return rows
     }
 }
 
@@ -150,18 +163,11 @@ struct PromptImportData {
 // MARK: - Errors
 
 enum PromptCSVError: LocalizedError {
-    case invalidFormat
+    /// No row with prompt text: an empty file, a header on its own, or every
+    /// row missing its first column.
     case emptyFile
-    case parseError(row: Int, detail: String)
 
     var errorDescription: String? {
-        switch self {
-        case .invalidFormat:
-            return "The CSV file format is invalid."
-        case .emptyFile:
-            return "The file contains no prompts to import."
-        case .parseError(let row, let detail):
-            return "Error on row \(row): \(detail)"
-        }
+        "No prompts found. Put one prompt per row in the first column, under a header row: text, category, difficulty."
     }
 }

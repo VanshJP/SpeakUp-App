@@ -39,6 +39,11 @@ struct CurriculumView: View {
             NavigationStack {
                 AchievementGalleryView()
                     .appBackground(.subtle)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button(role: .close) { showingAwards = false }
+                        }
+                    }
             }
         }
         .onAppear {
@@ -55,21 +60,7 @@ struct CurriculumView: View {
 
     /// Page name + trophy. Learn hides the nav bar like every root tab.
     private var awardsRow: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Learn")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .textCase(.uppercase)
-                    .tracking(0.8)
-
-                Text("Skill Studio")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-            }
-
-            Spacer(minLength: 0)
-
+        PageTitle(kicker: "Learn", title: "Skill Studio") {
             Button {
                 Haptics.light()
                 showingAwards = true
@@ -80,7 +71,6 @@ struct CurriculumView: View {
             }
             .accessibilityLabel("Achievements")
         }
-        .padding(.top, 4)
     }
 
     // MARK: - Studio Session
@@ -375,7 +365,10 @@ struct CurriculumView: View {
                         .opacity(state == .locked ? 0.7 : 1)
 
                     HStack(spacing: 8) {
-                        LessonModalityStrip(types: lesson.studioPlan, compact: true)
+                        // Only the lesson you are on carries colour; every other
+                        // row's plan is grey, so a locked row no longer has the
+                        // brightest ink in it.
+                        LessonModalityStrip(types: lesson.studioPlan, compact: true, muted: state != .current)
                         Spacer(minLength: 0)
                         Text(Self.lessonMeta(lesson))
                             .font(.caption2.weight(.medium))
@@ -485,7 +478,7 @@ struct CurriculumView: View {
         let practiceSeconds = lesson.practiceSeconds
         if practiceSeconds > 0 {
             let minutes = max(1, Int((Double(practiceSeconds) / 60).rounded()))
-            parts.append("\(minutes) min speak")
+            parts.append("\(minutes) min speaking")
         } else {
             let count = lesson.activities.count
             parts.append("\(count) step\(count == 1 ? "" : "s")")
@@ -508,6 +501,7 @@ struct CurriculumView: View {
 struct LessonModalityStrip: View {
     let types: [CurriculumActivityType]
     var compact: Bool = false
+    var muted: Bool = false
 
     var body: some View {
         HStack(spacing: compact ? 4 : 6) {
@@ -525,7 +519,7 @@ struct LessonModalityStrip: View {
                     Text(type.teacherRole)
                         .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
                 }
-                .foregroundStyle(type.teacherColor.opacity(0.95))
+                .foregroundStyle(muted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(type.teacherColor.opacity(0.95)))
             }
         }
         .accessibilityElement(children: .ignore)

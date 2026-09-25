@@ -96,6 +96,22 @@ struct RecordingDetailView: View {
     @State private var coachMoments = CoachMomentService.shared
     @State private var coachMomentEvaluated = false
     @State private var isDetailActive = false
+    /// The user asked for the check-in again from the Coaching tab. Bypasses
+    /// the post-session-only rule and the first-session skip; cleared on
+    /// hand-over.
+    @State private var reopenedSelfCheck = false
+    /// True once the personal-average snapshot has landed. The hero's "vs your
+    /// average" line, the comparison card, and the next step wait for it
+    /// rather than printing "Your first scored session" and then flipping.
+    @State private var baselinesLoaded = false
+    /// Bumped when the page switches tabs on the user's behalf (the transcript
+    /// excerpt), so the picker scrolls to the top with the new tab under it.
+    @State private var tabScrollRequest = 0
+
+    /// "Not now" on the first-listen note holds for the rest of the launch: a
+    /// second tap on play is the answer, not a reason to ask again.
+    private static var listenBackDeclinedThisLaunch = false
+    private static let tabPickerID = "detailTabPicker"
 
     @Query private var userSettings: [UserSettings]
 
@@ -123,14 +139,33 @@ struct RecordingDetailView: View {
         userSettings.first?.sessionFeedbackEnabled ?? true
     }
 
+    /// Whether this screen may ask the post-take check-in: straight after a
+    /// take, or when the user asks for it from the Coaching tab. A take
+    /// reopened from History, a Story, or Learn always opens on its result -
+    /// the dismissal store lives in memory, so gating on it alone re-asked
+    /// about weeks-old takes after every relaunch.
+    ///
+    /// Cheap checks first: this runs from `body`, and `sessionFeedback` is a
+    /// Codable column that decodes on read.
+    private func offersSelfCheck(for recording: Recording) -> Bool {
+        guard feedbackEnabled else { return false }
+        let asked = reopenedSelfCheck
+            || (source == .postSession
+                && !isFirstAnalyzedSession
+                && !SessionFeedbackGateStore.isDismissed(recording.id))
+        return asked && recording.sessionFeedback == nil
+    }
+
+    /// Holds the check-in on screen whatever the score is doing, so a score
+    /// landing mid-answer no longer tears the questions down and restarts
+    /// them. `AnalyzingView` offers "See results" once scoring stops.
     private func shouldGateFeedback(for recording: Recording) -> Bool {
-        // `coachAnalysis != nil`, not `recording.analysis != nil`: the latter
-        // decodes the blob, and this runs from `body` on every redraw.
-        feedbackEnabled &&
-        !isFirstAnalyzedSession &&
-        coachAnalysis != nil &&
-        recording.sessionFeedback == nil &&
-        !SessionFeedbackGateStore.isDismissed(recording.id)
+        offersSelfCheck(for: recording)
+    }
+
+    private var canShare: Bool {
+        guard case .ready = detailScreenState else { return false }
+        return coachAnalysis != nil
     }
 
     var body: some View {
@@ -150,17 +185,20 @@ struct RecordingDetailView: View {
 
             case .missing:
                 ContentUnavailableView(
-                    "Recording Not Found",
+                    "Recording not found",
                     systemImage: "exclamationmark.triangle",
                     description: Text("This recording may have been deleted.")
                 )
 
             case .processing(let recording):
+                // The check-in only where `offersSelfCheck` allows it: a take
+                // reopened while it is still scoring shows the scoring status
+                // alone instead of re-asking what Save & close skipped.
                 AnalyzingView(
                     recording: recording,
                     isModelLoading: speechService.isLoadingModel,
                     isDownloadingModel: speechService.isDownloadingModel,
-                    feedbackEnabled: feedbackEnabled,
+                    feedbackEnabled: offersSelfCheck(for: recording),
                     feedbackQuestions: feedbackQuestionsForAnalyzing,
                     existingFeedback: recording.sessionFeedback,
                     onFeedbackSubmitted: { feedback in
@@ -169,20 +207,23 @@ struct RecordingDetailView: View {
                     },
                     onFeedbackCompleted: {
                         SessionFeedbackGateStore.markDismissed(recording.id)
+                        reopenedSelfCheck = false
                         if coachAnalysis != nil {
                             recording.isProcessing = false
                             try? modelContext.save()
                         }
                         runReadySetupIfNeeded()
                     },
-                    analysisReady: coachAnalysis != nil
+                    analysisReady: coachAnalysis != nil || recording.overallScore != nil,
+                    isStillProcessing: recording.isProcessing
+                        || RecordingProcessingCoordinator.shared.isProcessing(recording.id)
                 )
 
             case .ready(let recording):
                 readyContent(recording)
             }
         }
-        .navigationTitle("")
+        .navigationTitle("Take")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -195,6 +236,9 @@ struct RecordingDetailView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
+                // A card needs a score; an unscored take only reached the
+                // share sheet's "hasn't been scored yet" dead end.
+                .disabled(!canShare)
                 .accessibilityLabel("Share")
             }
 
@@ -235,6 +279,7 @@ struct RecordingDetailView: View {
             settingsViewModel.configure(with: modelContext)
             await loadRecording()
             if let recording {
+                journalSaved = UserDefaults.standard.bool(forKey: Self.journalNoteKey(for: recording.id))
                 enqueueProcessingIfNeeded(recording)
             }
             runReadySetupIfNeeded()
@@ -263,7 +308,7 @@ struct RecordingDetailView: View {
                 coachMomentEvaluated = false
             }
         }
-        .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
+        .alert("Delete this recording?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 deleteRecording()
@@ -271,7 +316,7 @@ struct RecordingDetailView: View {
         } message: {
             Text("This permanently deletes this recording and its audio.")
         }
-        .alert("Couldn't Play Recording", isPresented: Binding(
+        .alert("Couldn't play this recording", isPresented: Binding(
             get: { playbackErrorMessage != nil },
             set: { if !$0 { playbackErrorMessage = nil } }
         )) {
@@ -286,8 +331,16 @@ struct RecordingDetailView: View {
             }
         }
         .sheet(isPresented: $showingScoreWeights) {
+            // Opened from the score it explains, so it says up front that a
+            // saved change moves future takes, not the number behind it.
             NavigationStack {
                 ScoreWeightsView(viewModel: settingsViewModel)
+                    .navigationSubtitle("Applies to future takes")
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button(role: .close) { showingScoreWeights = false }
+                        }
+                    }
             }
         }
         .sheet(item: $nextStepDrill) { mode in
@@ -314,6 +367,7 @@ struct RecordingDetailView: View {
                         proceedWithPlayback()
                     },
                     onCancel: {
+                        Self.listenBackDeclinedThisLaunch = true
                         showingListenBackEncouragement = false
                     }
                 )
@@ -325,79 +379,102 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func readyContent(_ recording: Recording) -> some View {
-        PageScrollView {
-            VStack(spacing: 20) {
-                contextStrip(recording)
-
-                // Cached copy, not `recording.analysis`: the blob would decode
-                // on every redraw, and this branch gates the whole page.
-                if let analysis = coachAnalysis {
-                    scoreHero(analysis)
-                    takeComparisonSection(analysis)
-                    if allowsCoachMoments, let moment = coachMoments.pendingDetail {
-                        CoachMomentCard(
-                            moment: moment,
-                            onAccept: { acceptCoachMoment(moment, recording: recording) },
-                            onDismiss: { coachMoments.dismiss(moment, context: modelContext) }
-                        )
-                    }
-                    if coachMoments.pendingDetail?.signal != .softLanding,
-                       coachMoments.pendingDetail?.signal != .firstAxisClear {
-                        nextStepSection(analysis, recording: recording)
-                    }
-                    shareCTASection(recording)
-
-                    detailTabPicker
-
-                    switch selectedDetailTab {
-                    case .breakdown:
-                        breakdownTabContent(recording, analysis: analysis)
-                    case .transcript:
-                        transcriptTabContent(recording)
-                    case .coaching:
-                        // Analysis passed down rather than re-read: every
-                        // `recording.analysis` access decodes the blob again.
-                        coachingTabContent(recording, analysis: analysis)
-                    }
-                } else if recording.analysisBlockedByAllowance {
-                    // Held back by the free allowance, not broken.
-                    analysisDeferredCard(recording)
-                } else if recording.overallScore != nil {
-                    if isResolvingSessionData {
-                        VStack(spacing: 12) {
-                            VoiceLoader()
-                                .foregroundStyle(.secondary)
-                            Text("Loading your breakdown…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 48)
-                    } else {
-                        analysisUnavailableCard(recording)
-                    }
-                } else {
-                    analysisUnavailableCard(recording)
-                    transcriptTabContent(recording)
+        ScrollViewReader { proxy in
+            PageScrollView {
+                readyStack(recording)
+                    .padding()
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .contentMargins(.horizontal, 0)
+            .onChange(of: tabScrollRequest) { _, _ in
+                withAnimation(AppMotion.slide) {
+                    proxy.scrollTo(Self.tabPickerID, anchor: .top)
                 }
             }
-            .padding()
+            // A bar, not an inset: content scrolling under the glass drawer
+            // gets the system's soft scroll edge (ui-design-system 15d).
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                if playableMediaAvailable {
+                    PlaybackDrawerContainer(
+                        recording: recording,
+                        waveformHeights: waveformHeights,
+                        playbackViewModel: playbackViewModel,
+                        onTogglePlayback: { togglePlayback(recording) },
+                        onSeek: { progress in
+                            audioService.seek(to: progress)
+                            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+                        }
+                    )
+                }
+            }
         }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize)
-        .contentMargins(.horizontal, 0)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playableMediaAvailable {
-                PlaybackDrawerContainer(
-                    recording: recording,
-                    waveformHeights: waveformHeights,
-                    playbackViewModel: playbackViewModel,
-                    onTogglePlayback: { togglePlayback(recording) },
-                    onSeek: { progress in
-                        audioService.seek(to: progress)
-                        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+    }
+
+    @ViewBuilder
+    private func readyStack(_ recording: Recording) -> some View {
+        VStack(spacing: 20) {
+            contextStrip(recording)
+
+            // Cached copy, not `recording.analysis`: the blob would decode
+            // on every redraw, and this branch gates the whole page.
+            if let analysis = coachAnalysis {
+                scoreHero(analysis)
+                // Both read the personal-average snapshot. They arrive
+                // together once it lands instead of drawing a first guess
+                // (weakest subscore, no comparison) and then swapping it.
+                if baselinesLoaded {
+                    takeComparisonSection(analysis)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                if allowsCoachMoments, let moment = coachMoments.pendingDetail {
+                    CoachMomentCard(
+                        moment: moment,
+                        onAccept: { acceptCoachMoment(moment, recording: recording) },
+                        onDismiss: { coachMoments.dismiss(moment, context: modelContext) }
+                    )
+                }
+                if baselinesLoaded,
+                   coachMoments.pendingDetail?.signal != .softLanding,
+                   coachMoments.pendingDetail?.signal != .firstAxisClear {
+                    nextStepSection(analysis, recording: recording)
+                        .transition(.opacity)
+                }
+                shareCTASection(recording)
+
+                detailTabPicker
+                    .id(Self.tabPickerID)
+
+                switch selectedDetailTab {
+                case .breakdown:
+                    breakdownTabContent(recording, analysis: analysis)
+                case .transcript:
+                    transcriptTabContent(recording)
+                case .coaching:
+                    // Analysis passed down rather than re-read: every
+                    // `recording.analysis` access decodes the blob again.
+                    coachingTabContent(recording, analysis: analysis)
+                }
+            } else if recording.analysisBlockedByAllowance {
+                // Held back by the free allowance, not broken.
+                analysisDeferredCard(recording)
+            } else if recording.overallScore != nil {
+                if isResolvingSessionData {
+                    VStack(spacing: 12) {
+                        VoiceLoader()
+                            .foregroundStyle(.secondary)
+                        Text("Loading your breakdown…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 48)
+                } else {
+                    analysisUnavailableCard(recording)
+                }
+            } else {
+                analysisUnavailableCard(recording)
+                transcriptTabContent(recording)
             }
         }
     }
@@ -423,11 +500,14 @@ struct RecordingDetailView: View {
 
             readySetupTask?.cancel()
             readySetupTask = Task {
-                await populateWPMTimeSeriesIfNeeded(recordingID: recordingID)
-                guard !Task.isCancelled else { return }
+                // Baselines first: the comparison card and the next step at
+                // the top of the page wait on them, while the pace backfill
+                // only feeds a chart further down.
                 await loadPersonalAverageIfNeeded(excluding: recordingID)
                 guard !Task.isCancelled else { return }
                 evaluateCoachMomentIfNeeded(for: recording)
+                await populateWPMTimeSeriesIfNeeded(recordingID: recordingID)
+                guard !Task.isCancelled else { return }
                 await enhanceCoherenceIfNeeded(recordingID: recordingID)
             }
         }
@@ -450,7 +530,7 @@ struct RecordingDetailView: View {
     }
 
     private func loadPersonalAverageIfNeeded(excluding currentID: UUID) async {
-        guard baselines.score == nil, coachPlan == nil else { return }
+        guard !baselinesLoaded else { return }
         let container = modelContext.container
         let weights = ScoreWeights(from: userSettings.first)
 
@@ -464,11 +544,15 @@ struct RecordingDetailView: View {
             repeatSubject: subject,
             currentDate: date
         )
-        baselines = snapshot.baselines
-        crutchBaseline = snapshot.crutchBaseline
-        coachPlan = snapshot.plan
-        previousTake = snapshot.previousTake
-        showsFocusCard = snapshot.currentIsInPlanWindow
+        guard !Task.isCancelled else { return }
+        withAnimation(AppMotion.settle) {
+            baselines = snapshot.baselines
+            crutchBaseline = snapshot.crutchBaseline
+            coachPlan = snapshot.plan
+            previousTake = snapshot.previousTake
+            showsFocusCard = snapshot.currentIsInPlanWindow
+            baselinesLoaded = true
+        }
         considerReviewPromptForStrongResult()
     }
 
@@ -554,7 +638,7 @@ struct RecordingDetailView: View {
     private func analysisDeferredCard(_ recording: Recording) -> some View {
         let decision = AllowanceGate.decision(settings: userSettings.first)
 
-        GlassCard(tint: AppColors.glassTintPrimary) {
+        GlassCard(tint: AppColors.primary.opacity(0.06)) {
             VStack(spacing: 12) {
                 Image(systemName: "clock.badge.checkmark")
                     .font(.system(size: 26, weight: .medium))
@@ -588,7 +672,7 @@ struct RecordingDetailView: View {
 
     private func deferredMessage(for decision: AllowanceDecision) -> String {
         guard case .exhausted(let resetsOn) = decision else {
-            return "This recording is safe. Tap Try Again to score it now."
+            return "This recording is safe. Try scoring it again now."
         }
         let date = resetsOn.formatted(date: .abbreviated, time: .omitted)
         return "Your free analyses are used up for now. The audio is safe, it scores automatically on \(date)."
@@ -606,16 +690,19 @@ struct RecordingDetailView: View {
                     Text("Couldn't score this take")
                         .font(.headline)
                         .foregroundStyle(.white)
-                    Text("Your recording is safe. You can listen back now, or try scoring it again when you're ready.")
+                    Text(playableMediaAvailable
+                         ? "Your recording is safe. You can listen back now, or try scoring it again."
+                         : "Your recording is safe. Try scoring it again when you're ready.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
 
+                // The one thing to do on this screen, so it is the white CTA.
                 GlassButton(
                     title: "Try scoring again",
                     icon: "arrow.clockwise",
-                    style: .secondary,
+                    style: .primary,
                     fullWidth: true
                 ) {
                     Haptics.medium()
@@ -638,7 +725,11 @@ struct RecordingDetailView: View {
         // Never mark an already-analyzed recording as processing - doing so
         // before this guard used to strand the screen on AnalyzingView forever.
         // Cached copy: `recording.analysis` decodes the blob on every call.
-        guard coachAnalysis == nil else { return }
+        // `coachAnalysis` is still nil when `.task` calls this on open, so the
+        // score column decides there: guarding on the cache alone marked every
+        // scored take as processing and flashed the analyzing screen (and the
+        // check-in) each time one was opened.
+        guard coachAnalysis == nil, force || recording.overallScore == nil else { return }
         if force {
             sessionWords = nil
             speakerTurnsCache = []
@@ -676,7 +767,8 @@ struct RecordingDetailView: View {
             axes: axes,
             strongestAxisID: emphasis.strongest,
             weakestAxisID: emphasis.weakest,
-            onShowWeights: { showingScoreWeights = true }
+            onShowWeights: { showingScoreWeights = true },
+            baselinesLoaded: baselinesLoaded
         )
     }
 
@@ -701,7 +793,7 @@ struct RecordingDetailView: View {
             editingTitleText = recording.customTitle ?? ""
             isEditingTitle = true
         }
-        .alert("Name This Session", isPresented: $isEditingTitle) {
+        .alert("Name this session", isPresented: $isEditingTitle) {
             TextField("e.g. Elevator pitch practice", text: $editingTitleText)
             Button("Save") {
                 let trimmed = editingTitleText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -867,7 +959,7 @@ struct RecordingDetailView: View {
     private func takeTimelineSection(_ timeline: TakeTimeline) -> some View {
         if timeline.segments.count > 1 {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Take timeline", icon: "waveform.path")
+                GlassSectionHeader("Take timeline")
 
                 GlassCard {
                     // Past AX1 the lane labels squeeze the take to a sliver;
@@ -884,7 +976,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func wpmChartSection(_ wpmData: [WPMDataPoint]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Pace over time", icon: "chart.line.uptrend.xyaxis")
+            GlassSectionHeader("Pace over time")
 
             GlassCard {
                 WPMChartView(
@@ -909,7 +1001,7 @@ struct RecordingDetailView: View {
     /// a wrong seek just plays nearby audio.
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Filler words used", icon: "exclamationmark.bubble.fill")
+            GlassSectionHeader("Filler words used")
 
             GlassCard {
                 VStack(spacing: 14) {
@@ -938,8 +1030,11 @@ struct RecordingDetailView: View {
                                                 .padding(.horizontal, 10)
                                                 .padding(.vertical, 5)
                                                 .background(Capsule().fill(AppColors.warning.opacity(0.15)))
+                                                // The chip stays small; the target does not.
+                                                .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+                                                .contentShape(Rectangle())
                                         }
-                                        .buttonStyle(.plain)
+                                        .buttonStyle(GlassPressStyle())
                                         .accessibilityLabel("Play \(filler.word), occurrence \(index + 1)")
                                     }
                                 }
@@ -957,7 +1052,7 @@ struct RecordingDetailView: View {
     private func transcriptSection(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                GlassSectionHeader("Transcript", icon: "doc.text.fill")
+                GlassSectionHeader("Transcript")
 
                 copyTranscriptButton(text: text)
             }
@@ -978,13 +1073,14 @@ struct RecordingDetailView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                GlassSectionHeader("Transcript", icon: "doc.text.fill")
+                GlassSectionHeader("Transcript")
 
                 HStack(spacing: 6) {
                     copyTranscriptButton(text: words.map(\.word).joined(separator: " "))
 
                     if hasSpeakerSeparation {
                         Button {
+                            Haptics.selection()
                             showSpeakerTurns.toggle()
                         } label: {
                             Image(systemName: showSpeakerTurns ? "person.2.fill" : "person")
@@ -995,7 +1091,7 @@ struct RecordingDetailView: View {
                                     Circle()
                                         .fill(showSpeakerTurns ? AppColors.primary.opacity(0.15) : .clear)
                                 }
-                                .frame(width: 40, height: 40)
+                                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Show speaker turns")
@@ -1005,6 +1101,7 @@ struct RecordingDetailView: View {
                     if let analysis = coachAnalysis,
                        analysis.fillerWords.contains(where: { $0.kind == .filler }) {
                         Button {
+                            Haptics.selection()
                             showFillerHighlights.toggle()
                         } label: {
                             Image(systemName: showFillerHighlights ? "bubble.left.fill" : "bubble.left")
@@ -1015,7 +1112,7 @@ struct RecordingDetailView: View {
                                     Circle()
                                         .fill(showFillerHighlights ? AppColors.warning.opacity(0.1) : .clear)
                                 }
-                                .frame(width: 40, height: 40)
+                                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Highlight filler words")
@@ -1024,6 +1121,7 @@ struct RecordingDetailView: View {
 
                     if let analysis = coachAnalysis, !analysis.vocabWordsUsed.isEmpty {
                         Button {
+                            Haptics.selection()
                             showVocabHighlights.toggle()
                         } label: {
                             Image(systemName: showVocabHighlights ? "character.book.closed.fill" : "character.book.closed")
@@ -1034,7 +1132,7 @@ struct RecordingDetailView: View {
                                     Circle()
                                         .fill(showVocabHighlights ? AppColors.success.opacity(0.1) : .clear)
                                 }
-                                .frame(width: 40, height: 40)
+                                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Highlight vocabulary words")
@@ -1190,7 +1288,7 @@ struct RecordingDetailView: View {
                         .fill(showCopiedConfirmation ? AppColors.success.opacity(0.1) : .clear)
                 }
                 .animation(.easeInOut(duration: 0.2), value: showCopiedConfirmation)
-                .frame(width: 40, height: 40)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(showCopiedConfirmation ? "Copied" : "Copy transcript")
@@ -1258,7 +1356,8 @@ struct RecordingDetailView: View {
             Haptics.light()
             pendingShareRecording = recording
         } label: {
-            GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.08), padding: 14) {
+            // Neutral plate: a share row is chrome, and colour belongs to data.
+            GlassCard(cornerRadius: 16, padding: 14) {
                 HStack(spacing: 12) {
                     IconChip(icon: "square.and.arrow.up", size: 32)
 
@@ -1308,6 +1407,9 @@ struct RecordingDetailView: View {
         if let words = sessionWords, !words.isEmpty {
             TranscriptExcerptCard(words: words) {
                 withAnimation(AppMotion.slide) { selectedDetailTab = .transcript }
+                // The excerpt sits below the fold; without this the swap
+                // kept the offset and landed mid-transcript.
+                tabScrollRequest += 1
             }
         }
 
@@ -1369,7 +1471,7 @@ struct RecordingDetailView: View {
 
         if !crutchHits.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Word swaps", icon: "arrow.triangle.swap")
+                GlassSectionHeader("Word swaps")
 
                 CrutchSwapsCard(
                     hits: crutchHits,
@@ -1432,40 +1534,22 @@ struct RecordingDetailView: View {
         let isAppleIntelligence = llmService.activeBackend == .appleIntelligence
 
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Label(
-                    "AI Insights",
-                    systemImage: isAppleIntelligence ? "apple.intelligence" : "cpu"
+            // Text-only header like every other chapter; which model wrote the
+            // note rides in a pill rather than a gradient badge.
+            GlassSectionHeader("AI insights") {
+                StatusPill(
+                    text: isAppleIntelligence ? "Apple Intelligence" : llmService.localLLM.modelDisplayName,
+                    color: AppColors.primary,
+                    glyph: .icon(isAppleIntelligence ? "apple.intelligence" : "cpu")
                 )
-                .font(.headline)
-
-                Text(isAppleIntelligence ? "AI" : llmService.localLLM.modelDisplayName)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: isAppleIntelligence
-                                        ? [AppColors.categoryIndigo, AppColors.categoryPlum]
-                                        : [AppColors.categoryBrandBright, AppColors.primary],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    }
-
-                Spacer()
             }
 
             if llmService.isGenerating {
                 GlassCard {
                     HStack(spacing: 12) {
                         VoiceLoader()
-                            .foregroundStyle(AppColors.primary)
-                        Text("Generating personalized insights...")
+                            .foregroundStyle(.secondary)
+                        Text("Generating personalized insights…")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -1508,18 +1592,18 @@ struct RecordingDetailView: View {
 
     // MARK: - Reflection Prompt Card
 
+    /// The one place this page asks how the take felt. Secondary, because the
+    /// next step above owns the page's white CTA.
     private var reflectionPromptCard: some View {
-        FeaturedGlassCard {
+        GlassCard {
             VStack(spacing: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "checkmark.message.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.primary)
+                    IconChip(icon: "checkmark.message.fill")
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("How did you feel?")
+                        Text("How did that feel?")
                             .font(.subheadline.weight(.semibold))
-                        Text("Reflect on this session to track your growth")
+                        Text("A few quick questions, saved with this take.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1527,65 +1611,76 @@ struct RecordingDetailView: View {
                     Spacer(minLength: 0)
                 }
 
-                GlassButton(title: "Answer quick questions", icon: "pencil.line", style: .primary, fullWidth: true) {
+                GlassButton(title: "Answer quick questions", icon: "pencil.line", style: .secondary, fullWidth: true) {
                     Haptics.medium()
+                    // A local flag, not only the dismissal store: the gate
+                    // skips a user's first take and anything reopened from
+                    // History, so `reopen` alone left this button dead there.
                     if case .ready(let recording) = detailScreenState {
                         SessionFeedbackGateStore.reopen(recording.id)
                     }
+                    reopenedSelfCheck = true
                 }
             }
         }
     }
 
-    // MARK: - Journal Reflection
+    // MARK: - Journal Note
 
+    /// A free-text note filed to the Journal. Worded as a note, not a second
+    /// "how did that feel?" - the check-in card above already asks that.
+    ///
+    /// Written once per take. `Story` has no link back to a recording and the
+    /// schema is additive-only, so the saved flag lives in UserDefaults under
+    /// the take's id; a plain `@State` flag reset on every visit and let the
+    /// same take file duplicate notes.
     @ViewBuilder
     private func journalReflectionSection(_ recording: Recording) -> some View {
+        let noteIsEmpty = journalReflectionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
         if journalSaved {
-            GlassCard(tint: AppColors.glassTintSuccess) {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(AppColors.success)
-                    Text("Reflection saved to Journal")
+            GlassCard(tint: AppColors.success.opacity(0.06)) {
+                Label {
+                    Text("Note saved to your journal")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.white)
-                    Spacer()
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(AppColors.success)
                 }
+                .labelStyle(.row)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else if showingJournalReflection {
-            GlassCard(tint: AppColors.glassTintPrimary.opacity(0.5)) {
+            GlassCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "bubble.left.fill")
-                            .foregroundStyle(AppColors.primary)
-                        Text("Quick Reflection")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Button {
+                    GlassCardTitle("Journal note") {
+                        DismissButton(label: "Close journal note") {
                             withAnimation { showingJournalReflection = false }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.caption)
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
                         }
                     }
 
-                    TextField("How did that feel?", text: $journalReflectionText, axis: .vertical)
+                    TextField("What will you try next time?", text: $journalReflectionText, axis: .vertical)
                         .lineLimit(3...6)
                         .textFieldStyle(.plain)
                         .font(.body)
                         .padding(10)
+                        // Painted, not material: the field sits on a glass
+                        // card, and glass on glass renders as a grey band.
                         .background {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.white.opacity(0.10))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
                         }
 
-                    GlassButton(title: "Save to journal", icon: "text.book.closed", style: .primary, size: .small) {
+                    GlassButton(title: "Save to journal", icon: "text.book.closed", style: .secondary, size: .small) {
                         saveReflectionToJournal(recording)
                     }
-                    .disabled(journalReflectionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(noteIsEmpty)
+                    .opacity(noteIsEmpty ? 0.5 : 1)
                 }
             }
         } else {
@@ -1595,21 +1690,21 @@ struct RecordingDetailView: View {
                     showingJournalReflection = true
                 }
             } label: {
-                GlassCard(tint: AppColors.glassTintAccent) {
+                GlassCard {
                     HStack(spacing: 10) {
-                        Image(systemName: "bubble.left.fill")
-                            .foregroundStyle(.secondary)
-                        Text("How did that feel? Add a reflection...")
+                        Label("Write a journal note", systemImage: "square.and.pencil")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .labelStyle(.row)
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
+                    .frame(minHeight: AppLayout.minHitTarget - 26)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
         }
     }
 
@@ -1617,7 +1712,7 @@ struct RecordingDetailView: View {
         storiesViewModel.configure(with: modelContext)
 
         let title = "Reflection, \(recording.date.formatted(date: .abbreviated, time: .omitted))"
-        storiesViewModel.createStory(
+        let saved = storiesViewModel.createStory(
             title: title,
             content: journalReflectionText,
             tags: [],
@@ -1626,12 +1721,21 @@ struct RecordingDetailView: View {
             occasion: nil,
             entryType: .reflection
         )
+        guard saved != nil else {
+            Haptics.error()
+            return
+        }
 
+        UserDefaults.standard.set(true, forKey: Self.journalNoteKey(for: recording.id))
         Haptics.success()
         withAnimation(.spring(response: 0.3)) {
             journalSaved = true
             showingJournalReflection = false
         }
+    }
+
+    private static func journalNoteKey(for id: UUID) -> String {
+        "recordingDetail.journalNote.\(id.uuidString)"
     }
 
     // MARK: - Goal Progress Card
@@ -1650,7 +1754,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func selfAssessmentSection(_ feedback: SessionFeedback) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Self-assessment", icon: "checkmark.message")
+            GlassSectionHeader("Self-assessment")
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 14) {
@@ -1694,13 +1798,16 @@ struct RecordingDetailView: View {
         }
     }
 
+    /// The words the check-in's `FeelingDial` showed when the answer was given
+    /// (`takeFeelings` in AnalyzingView.swift) - change them together, or the
+    /// summary reads back a word the user never picked.
     private func selfAssessmentLabel(for value: Int) -> String {
         switch value {
-        case 1: return "Very Poor"
-        case 2: return "Poor"
+        case 1: return "Rough"
+        case 2: return "Shaky"
         case 3: return "Okay"
         case 4: return "Good"
-        case 5: return "Excellent"
+        case 5: return "Great"
         default: return ""
         }
     }
@@ -1802,7 +1909,7 @@ struct RecordingDetailView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "circle.fill")
                     .font(.system(size: 6, weight: .bold))
-                    .foregroundStyle(AppColors.primary)
+                    .foregroundStyle(.secondary)
                     .padding(.top, 6)
 
                 Text(bullet)
@@ -2050,7 +2157,8 @@ struct RecordingDetailView: View {
             return
         }
 
-        if let settings = userSettings.first, settings.listenBackCount == 0 {
+        if let settings = userSettings.first, settings.listenBackCount == 0,
+           !Self.listenBackDeclinedThisLaunch {
             pendingPlaybackTime = time
             showingListenBackEncouragement = true
             return
@@ -2104,7 +2212,10 @@ struct RecordingDetailView: View {
         )
     }
 
+    /// The heart in the context strip is the visible answer; the menu closes
+    /// on its own and used to leave no sign the tap landed.
     private func toggleFavorite(_ recording: Recording) {
+        Haptics.selection()
         recording.isFavorite.toggle()
         try? modelContext.save()
     }

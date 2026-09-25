@@ -39,7 +39,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
     var outcome: String {
         switch self {
         case .warmUp: return "Loosen the voice so your first sentence isn't the warm-up"
-        case .drills: return "Fix one habit in under a minute"
+        case .drills: return "Fix one habit in a short, scored round"
         case .readAloud: return "Train clarity against a script - ours or your own"
         case .calm: return "Settle nerves so the take starts clean"
         case .learn: return "Follow a week-by-week speaking curriculum"
@@ -58,11 +58,28 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
     var format: String {
         switch self {
         case .warmUp: return "Guided steps · mic off · 20-60s"
-        case .drills: return "Mic on · scored · 15-60s"
+        case .drills: return "Mic on · scored · \(Self.drillRoundRange)"
         case .readAloud: return "Mic on · scored word by word"
         case .calm: return "Guided steps · mic off · 2-5 min"
         case .learn: return "Lessons, then activities"
         }
+    }
+
+    /// Shortest to longest round across every drill's ladder ("15s-2 min").
+    ///
+    /// Derived, like the focus listings: the card said "15-60s" while Pace
+    /// Control climbs to two minutes and three other ladders reach 90s.
+    private static var drillRoundRange: String {
+        let rounds = DrillMode.allCases.flatMap { $0.durationLadder }
+        guard let shortest = rounds.min(), let longest = rounds.max() else { return "" }
+        return "\(roundLabel(shortest))-\(roundLabel(longest))"
+    }
+
+    private static func roundLabel(_ seconds: Int) -> String {
+        guard seconds >= 60 else { return "\(seconds)s" }
+        return seconds % 60 == 0
+            ? "\(seconds / 60) min"
+            : String(format: "%.1f min", Double(seconds) / 60)
     }
 
     /// Which focuses this tool has material for.
@@ -163,5 +180,55 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .readAloud: return .readAloud
         case .drill: return .drills
         }
+    }
+}
+
+// MARK: - Search
+
+/// One exercise, drill or passage, found by name from Library → Tools search.
+nonisolated struct PracticeToolItem: Identifiable {
+    let id: String
+    let tool: PracticeToolKind
+    let title: String
+    let focus: PracticeFocus
+}
+
+extension PracticeToolKind {
+    /// Every catalog item whose name - or its category's, so "tongue twister"
+    /// finds the twisters - contains `query`, in presentation order.
+    ///
+    /// Tools search used to read tool and outcome copy only, so the names
+    /// people remember ("box breathing", "impromptu") found nothing at all.
+    static func items(matching query: String) -> [PracticeToolItem] {
+        func matches(_ fields: String...) -> Bool {
+            fields.contains { $0.localizedStandardContains(query) }
+        }
+
+        var items: [PracticeToolItem] = []
+        for exercise in DefaultWarmUps.all where matches(exercise.title, exercise.category.displayName) {
+            items.append(PracticeToolItem(
+                id: "warmUp/\(exercise.id)", tool: .warmUp,
+                title: exercise.title, focus: exercise.category.focus
+            ))
+        }
+        for mode in DrillMode.allCases where matches(mode.title) {
+            items.append(PracticeToolItem(
+                id: "drills/\(mode.rawValue)", tool: .drills,
+                title: mode.title, focus: mode.focus
+            ))
+        }
+        for passage in DefaultReadAloudPassages.all where matches(passage.title, passage.category.displayName) {
+            items.append(PracticeToolItem(
+                id: "readAloud/\(passage.id)", tool: .readAloud,
+                title: passage.title, focus: passage.category.focus
+            ))
+        }
+        for exercise in DefaultConfidenceExercises.all where matches(exercise.title, exercise.category.displayName) {
+            items.append(PracticeToolItem(
+                id: "calm/\(exercise.id)", tool: .calm,
+                title: exercise.title, focus: exercise.category.focus
+            ))
+        }
+        return items
     }
 }

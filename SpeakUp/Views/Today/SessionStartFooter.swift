@@ -45,7 +45,9 @@ struct SessionStartFooter: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                // Dims and settles on press like every other control; `.plain`
+                // gave no sign the tap had landed before the cover rose.
+                .buttonStyle(GlassPressStyle())
                 .accessibilityHint(freeHint)
             }
         }

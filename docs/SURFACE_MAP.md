@@ -200,6 +200,7 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Models/LessonIdentity.swift` | LessonMotif |
 | `SpeakUp/Models/Monetization.swift` | BetaAccess, LifetimeProduct, FoundingOffer, PaidFeature, PracticeTrial, TrialState, FreeTierPolicy, AllowanceState, AllowanceDecision, PracticeAllowance |
 | `SpeakUp/Models/PracticeRoutine.swift` | RoutineStep, RoutineProgress |
+| `SpeakUp/Models/PracticeToolKind.swift` | PracticeToolItem |
 | `SpeakUp/Models/ProgressCardData.swift` | Row |
 | `SpeakUp/Models/Prompt.swift` | PromptDifficulty, PromptCategory |
 | `SpeakUp/Models/ReadAloudPassage.swift` | SavedReadAloudTexts, ReadAloudDifficulty, ReadAloudCategory |
@@ -273,7 +274,7 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Theme/AppType.swift` | displayNumeral, metricValue, statValue, eyebrow, eyebrowStyle |
 | `SpeakUp/Theme/AppearanceEnvironment.swift` | GlassAppearance, GlassAppearanceKey, AppCanvasKey, IsOnGlassKey · defaultValue |
 | `SpeakUp/Theme/CanvasLook.swift` | CanvasMood, CanvasFrame · paint, at, count, gain |
-| `SpeakUp/Theme/GlassStyles.swift` | GlassCardModifier, GlassSectionHeader, GlassCardTitle · body, glassCard, glassBackground, glassCircle |
+| `SpeakUp/Theme/GlassStyles.swift` | GlassCardModifier, GlassSectionHeader, RowLabelStyle, GlassCardTitle · body, glassCard, glassBackground, glassCircle, makeBody, row |
 | `SpeakUp/ViewModels/ComparisonViewModel.swift` | ComparisonRecordingPoint, Delta |
 | `SpeakUp/ViewModels/HistoryViewModel.swift` | RecordingSummary, VocabCount, LoadResult |
 | `SpeakUp/ViewModels/OnboardingViewModel.swift` | OnboardingStep, OnboardingResult, BaselinePhase |
@@ -286,20 +287,20 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Views/CoachMoment/CoachMomentCard.swift` | CoachMomentOverlay |
 | `SpeakUp/Views/Components/AppTourView.swift` | AppTourStep, AppTourAnchorID, AppTourModel, AppTourKey, TourAnchorReporter, AppTourOverlay · begin, defaultValue, tourAnchor, body |
 | `SpeakUp/Views/Components/ArcDial.swift` | index |
-| `SpeakUp/Views/Components/ChartDateScrub.swift` | chartDateScrub |
-| `SpeakUp/Views/Components/CoachFocusCard.swift` | TrendChip, ProgressTrack · tint |
+| `SpeakUp/Views/Components/ChartDateScrub.swift` | chartDateScrub, body |
+| `SpeakUp/Views/Components/CoachFocusCard.swift` | TrendChip · tint |
 | `SpeakUp/Views/Components/ConfettiView.swift` | ConfettiParticle, Shape, Demo · lifetime, burst, draw |
 | `SpeakUp/Views/Components/CountUpText.swift` | Demo |
 | `SpeakUp/Views/Components/FeelingDial.swift` | Option, MoodFace, MoodMouth · path |
 | `SpeakUp/Views/Components/FlowLayout.swift` | CacheData · makeCache, sizeThatFits, placeSubviews |
-| `SpeakUp/Views/Components/GlassButton.swift` | GlassButtonLabel, GlassButtonChrome, IconPosition, GlassButtonVariant, GlassButtonSize, GlassPressStyle · body, makeBody |
-| `SpeakUp/Views/Components/GlassCard.swift` | FeaturedGlassCard, TickMeter, EmptyStateCard, EmptyStateInline |
+| `SpeakUp/Views/Components/GlassButton.swift` | GlassButtonLabel, GlassButtonChrome, IconPosition, GlassButtonVariant, GlassButtonSize, GlassPressStyle, RowPressStyle · body, makeBody |
+| `SpeakUp/Views/Components/GlassCard.swift` | GlassRowGroup, FeaturedGlassCard, TickMeter, EmptyStateCard, EmptyStateInline |
 | `SpeakUp/Views/Components/MetricExplainerSheet.swift` | description |
 | `SpeakUp/Views/Components/MetricRow.swift` | Status, MetricRowGroup, MetricRowDivider |
-| `SpeakUp/Views/Components/PageHeaderBar.swift` | InlineSearchField, PinnedPageHeader · headerIconChrome, restoresNavigationBar |
+| `SpeakUp/Views/Components/PageHeaderBar.swift` | PageTitle, SearchScope, InlineSearchField, PinnedPageHeader · headerIconChrome, restoresNavigationBar |
 | `SpeakUp/Views/Components/PersistentTextField.swift` | Coordinator · makeUIView, updateUIView, makeCoordinator |
 | `SpeakUp/Views/Components/PracticeHistoryChart.swift` | PracticeRecordingSummary, PracticeMetricsRow, PracticeDataPoint · from |
-| `SpeakUp/Views/Components/PracticeItemRow.swift` | Accessory · fraction |
+| `SpeakUp/Views/Components/PracticeItemRow.swift` | Accessory · dividerInset, fraction |
 | `SpeakUp/Views/Components/RichTextEditor.swift` | RichTextController, Coordinator, AttributedTextView · bold, italic, underline, heading, subheading, bodyStyle, bulletList, numberedList, checklist, dismissKeyboard, makeUIView, updateUIView, makeCoordinator, defaultAttributes, attributedString |
 | `SpeakUp/Views/Components/RingStatsView.swift` | GaugeItem |
 | `SpeakUp/Views/Components/SectionPicker.swift` | Style, Layout |
@@ -331,20 +332,21 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Views/Detail/TranscriptViews.swift` | TranscriptContentView, HighlightedTranscriptView, SpeakerTurn, SpeakerTurnTranscriptView, WordView |
 | `SpeakUp/Views/Drills/DrillSelectionView.swift` | DrillFlowView |
 | `SpeakUp/Views/Drills/DrillSessionView.swift` | DrillWaveform |
-| `SpeakUp/Views/Goals/GoalsView.swift` | GoalCard, GoalTemplateCard, CompletedGoalRow, GoalsViewModel |
+| `SpeakUp/Views/Goals/GoalsView.swift` | GoalRowLayout, GoalOptionsMenu, GoalCard, GoalTemplateCard, EndedGoalRow, CompletedGoalRow, GoalsViewModel |
 | `SpeakUp/Views/History/ActivityStrip.swift` | DayBucket, ActivityMetric |
 | `SpeakUp/Views/History/ComparisonView.swift` | ComparisonMetricRow, RecordingPicker |
 | `SpeakUp/Views/History/HistoryView.swift` | HistoryWeek, HistoryFilter, FilterChip, SelectedFilterChrome, RecordingRow, HistorySection |
-| `SpeakUp/Views/History/ProgressChartsView.swift` | ChartRecordingPoint, TrendChart, ProgressChartsContent, ChartTab, TimeRange, ScoreProgressChart, PlotModel, TrendPoint, WeeklyBucket, FillerTrendChart, PaceTrendChart, PlotPoint, SkillBreakdownCard, WeeklyFrequencyBucket, SessionFrequencyChart |
-| `SpeakUp/Views/History/ScenarioReadinessSection.swift` | ScenarioTint, MomentumGlyph, ScenarioRow, ScenarioInvitationRow |
+| `SpeakUp/Views/History/ProgressChartsView.swift` | ChartRecordingPoint, TrendChart, ProgressChartsModel, ProgressChartsContent, ChartTab, TimeRange, ProgressReviewSection, ScoreProgressChart, PlotModel, TrendPoint, ScrubReadout, WeeklyBucket, FillerTrendChart, PaceTrendChart, PlotPoint, SkillBreakdownCard, WeeklyFrequencyBucket, SessionFrequencyChart |
+| `SpeakUp/Views/History/ScenarioReadinessSection.swift` | ScenarioRowLayout, ScenarioTint, MomentumGlyph, RowChevron, ScenarioRow, ScenarioInvitationRow |
 | `SpeakUp/Views/Onboarding/OnboardingBaselineSteps.swift` | OnboardingBaselineBriefingStep, OnboardingBaselineStep, BaselineRecordControl, BaselineWaveformRing, ElapsedClock, OnboardingBaselineResultView, StageState, OnboardingBaselineRevealView |
 | `SpeakUp/Views/Onboarding/OnboardingIntroSteps.swift` | OnboardingWelcomeStep, OnboardingNameStep, OnboardingGoalStep, OnboardingLevelStep |
 | `SpeakUp/Views/Onboarding/OnboardingMicStep.swift` | LiveMicWaveform, OnboardingWaveform |
 | `SpeakUp/Views/Onboarding/OnboardingPage.swift` | OnboardingCTA, OnboardingTextButton, OnboardingChoiceCard, OnboardingBullet, OnboardingOrb |
-| `SpeakUp/Views/Practice/PracticeFocusView.swift` | PracticeToolRoute, PracticeImproveRoute, PracticeImproveEntryRow, PracticeImproveListView, PracticeFocusRow, PracticeFocusDetailView |
+| `SpeakUp/Views/Practice/PracticeFocusView.swift` | PracticeToolRoute, PracticeImproveRoute, PracticeLinkRowLabel, PracticeImproveEntryRow, PracticeImproveListView, PracticeFocusRow, PracticeFocusDetailView |
 | `SpeakUp/Views/Practice/PracticeHubView.swift` | PracticeSection, CompareRoute |
+| `SpeakUp/Views/Progress/BeforeAfterReplayView.swift` | Side |
 | `SpeakUp/Views/Progress/JournalExportView.swift` | JournalTakePoint, DateRangeOption |
-| `SpeakUp/Views/Prompts/AllPromptsView.swift` | PromptCategoryProgress, ImportConfirmation, PromptFilter, PromptRow, PromptMetaLine |
+| `SpeakUp/Views/Prompts/AllPromptsView.swift` | PromptCategoryProgress, ImportConfirmation, PromptFilter, PromptRow, PromptWheelTeaser, PromptMetaLine |
 | `SpeakUp/Views/ReadAloud/ReadAloudComposerSheet.swift` | ReadAloudTextReplacement |
 | `SpeakUp/Views/ReadAloud/ReadAloudResultView.swift` | StatBadge |
 | `SpeakUp/Views/ReadAloud/ReadAloudSessionView.swift` | ReadAloudClock, ReadAloudPassageText, WrappingHStack, Cache |
@@ -354,22 +356,25 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Views/Recording/RecordingView.swift` | CircularWaveformView, MicLevelPill, RecordButtonWaveformStack, VocabStrip |
 | `SpeakUp/Views/Recording/TimerView.swift` | TimerDial, SessionDial, SessionDialSlot |
 | `SpeakUp/Views/Settings/AIModelSettingsView.swift` | ModelDownloadProgress |
+| `SpeakUp/Views/Settings/DataManagementView.swift` | Outcome |
+| `SpeakUp/Views/Settings/FeedbackSettingsView.swift` | AddFeedbackQuestionSheet |
 | `SpeakUp/Views/Settings/PrivacyDataView.swift` | Entry |
 | `SpeakUp/Views/Settings/ScoreWeightsView.swift` | WeightItem, SubscoreDescription |
 | `SpeakUp/Views/Settings/SessionDefaultsView.swift` | SessionDefaultsChangeModifiers |
 | `SpeakUp/Views/Settings/SettingsView.swift` | AboutSettingsView |
 | `SpeakUp/Views/Settings/VoiceCalibrationView.swift` | CalibrationPhase |
-| `SpeakUp/Views/Settings/WordBankView.swift` | VocabLevelChoice, VocabChallengeSettingsCard, CardPill |
-| `SpeakUp/Views/Stories/StoriesListView.swift` | FolderEditorPresentation, CompactStoryRow, StoryTagPill, TagSize |
+| `SpeakUp/Views/Settings/WordBankView.swift` | WordListTab, VocabLevelChoice, VocabChallengeSettingsCard, CardPill |
+| `SpeakUp/Views/Stories/StoriesListView.swift` | FolderEditorPresentation, StoryDeleteCopy, StoriesErrorAlert, CompactStoryRow, StoryTagPill, TagSize |
 | `SpeakUp/Views/Stories/StoryDetailView.swift` | StoryDisplayCache |
 | `SpeakUp/Views/Stories/StoryEditorView.swift` | Field |
-| `SpeakUp/Views/Stories/StoryFolderEditorSheet.swift` | StoryMoveFolderSheet |
+| `SpeakUp/Views/Stories/StoryFolderBar.swift` | PendingFolderDelete |
+| `SpeakUp/Views/Stories/StoryFolderEditorSheet.swift` | StoryMoveFolderSheet, StoryFolderChip |
 | `SpeakUp/Views/Streak/FlameAnimationView.swift` | FlameTeardropShape |
 | `SpeakUp/Views/Streak/StreakDetailView.swift` | DayCell |
 | `SpeakUp/Views/Today/RoutineCard.swift` | RoutineHandoffBar |
 | `SpeakUp/Views/Today/TodayView.swift` | PrepSuggestion, WiggleModifier |
 | `SpeakUp/Views/Today/WeeklyRecapCard.swift` | Metric |
-| `SpeakUp/Views/Words/WordLibraryView.swift` | WordLibraryEntry, WordLibraryTier, WordLibraryRow, WordLibraryDetailSheet, WordLibraryEntryRow, WordLibraryRoute |
+| `SpeakUp/Views/Words/WordLibraryView.swift` | WordLibraryEntry, WordLibraryTier, WordLibraryRow, WordLibraryDetailSheet, WordLibraryRoute |
 | `SpeakUpWidget/DailyPromptWidget.swift` | DailyPromptEntry, DailyPromptProvider, DailyPromptWidgetView |
 | `SpeakUpWidget/QuickPracticeWidget.swift` | QuickPracticeEntry, QuickPracticeProvider, QuickPracticeWidgetView |
 | `SpeakUpWidget/QuickStoryWidget.swift` | QuickStoryEntry, QuickStoryProvider, QuickStoryWidgetView |

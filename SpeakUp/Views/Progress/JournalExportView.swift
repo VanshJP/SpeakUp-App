@@ -25,12 +25,15 @@ struct JournalExportView: View {
     @State private var isExporting = false
     @State private var errorMessage: String?
     @State private var takes: [JournalTakePoint] = []
+    /// False until the first pass lands, so the summary does not flash zeros
+    /// and a disabled Export before the takes arrive.
+    @State private var hasLoadedTakes = false
 
     enum DateRangeOption: String, CaseIterable, Identifiable {
         case lastWeek = "Week"
         case lastMonth = "Month"
-        case last3Months = "3 Months"
-        case allTime = "All Time"
+        case last3Months = "3 months"
+        case allTime = "All time"
 
         var id: String { rawValue }
 
@@ -79,6 +82,7 @@ struct JournalExportView: View {
 
         guard !Task.isCancelled else { return }
         takes = points
+        hasLoadedTakes = true
     }
 
     var body: some View {
@@ -90,53 +94,49 @@ struct JournalExportView: View {
             ? (rangeScores.last ?? 0) - (rangeScores.first ?? 0)
             : 0
 
-        ZStack {
-            AppBackground()
-
-            PageScrollView {
-                VStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label("Date Range", systemImage: "calendar")
-                                .font(.headline)
-
-                            Spacer()
-
-                            Text("\(rangeTakes.count) sessions")
+        PageScrollView {
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    GlassSectionHeader("Date range") {
+                        if hasLoadedTakes {
+                            Text(rangeTakes.count == 1 ? "1 session" : "\(rangeTakes.count) sessions")
                                 .font(.caption)
+                                .monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
+                    }
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(DateRangeOption.allCases) { option in
-                                    FilterChip(
-                                        title: option.rawValue,
-                                        icon: option.icon,
-                                        isSelected: selectedRange == option
-                                    ) {
-                                        withAnimation(.spring(duration: 0.3)) {
-                                            selectedRange = option
-                                        }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(DateRangeOption.allCases) { option in
+                                FilterChip(
+                                    title: option.rawValue,
+                                    icon: option.icon,
+                                    isSelected: selectedRange == option
+                                ) {
+                                    withAnimation(.spring(duration: 0.3)) {
+                                        selectedRange = option
                                     }
                                 }
                             }
                         }
                     }
+                }
 
-                    GlassCard {
-                        Toggle(isOn: $includeAchievements) {
-                            Label("Include Achievements", systemImage: "trophy")
-                                .font(.subheadline)
-                        }
-                        .tint(AppColors.primary)
+                GlassCard {
+                    Toggle(isOn: $includeAchievements) {
+                        Label("Include achievements", systemImage: "trophy")
+                            .font(.subheadline)
                     }
+                    .tint(AppColors.primary)
+                }
+                .labelStyle(.row)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Summary", systemImage: "chart.bar.fill")
-                            .font(.headline)
+                VStack(alignment: .leading, spacing: 8) {
+                    GlassSectionHeader("Summary")
 
-                        FeaturedGlassCard {
+                    FeaturedGlassCard {
+                        if hasLoadedTakes {
                             JournalSummaryView(
                                 totalSessions: rangeTakes.count,
                                 totalMinutes: totalMinutes,
@@ -144,37 +144,50 @@ struct JournalExportView: View {
                                 improvement: improvement,
                                 unlockedAchievements: includeAchievements ? unlockedAchievementsCount : 0
                             )
+                        } else {
+                            VoiceLoader(size: .large)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 40)
                         }
                     }
-
-                    if let errorMessage {
-                        GlassCard {
-                            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                                .font(.subheadline)
-                                .foregroundStyle(AppColors.error)
-                        }
-                    }
-
-                    GlassButton(
-                        title: isExporting ? "Exporting..." : "Export PDF",
-                        icon: "doc.richtext",
-                        style: .secondary,
-                        isLoading: isExporting,
-                        fullWidth: true
-                    ) {
-                        exportPDF()
-                    }
-                    .disabled(rangeTakes.isEmpty || isExporting)
                 }
-                .padding()
+
+                if let errorMessage {
+                    GlassCard {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .font(.subheadline)
+                            .foregroundStyle(AppColors.error)
+                    }
+                }
             }
+            .padding(.top, 8)
+            .pageContentInsets()
         }
+        .scrollIndicators(.hidden)
+        // The sheet's one action stays in reach under the scroll, as a bar
+        // with the tab bar's soft edge rather than a slab.
+        .safeAreaBar(edge: .bottom) {
+            GlassButton(
+                title: isExporting ? "Exporting…" : "Export PDF",
+                icon: "doc.richtext",
+                style: .primary,
+                isLoading: isExporting,
+                fullWidth: true
+            ) {
+                exportPDF()
+            }
+            .disabled(!hasLoadedTakes || rangeTakes.isEmpty || isExporting)
+            .padding(.horizontal, AppLayout.pageHorizontal)
+            .padding(.vertical, 10)
+        }
+        .appBackground(.subtle)
         .navigationTitle("Progress Journal")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
+            ToolbarItem(placement: .topBarLeading) {
+                Button(role: .close) { dismiss() }
             }
         }
         .task {

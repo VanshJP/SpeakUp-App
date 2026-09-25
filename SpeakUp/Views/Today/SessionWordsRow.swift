@@ -45,7 +45,9 @@ struct SessionWordsRow: View {
 
             if isNew, let onAddToBank {
                 Button("Add to word bank", systemImage: "plus") {
-                    Haptics.success()
+                    // No haptic here: the handler buzzes once the word is
+                    // actually saved, and a tap that fails the safety check
+                    // should not feel like a success.
                     onAddToBank(word)
                 }
             }

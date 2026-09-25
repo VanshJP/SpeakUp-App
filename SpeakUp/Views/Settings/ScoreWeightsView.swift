@@ -6,15 +6,30 @@ struct ScoreWeightsView: View {
     @State private var didSave = false
 
     // Draft weights - not persisted until the user taps Save
-    @State private var draftClarity: Double = 0.12
-    @State private var draftPace: Double = 0.12
-    @State private var draftFiller: Double = 0.12
-    @State private var draftPause: Double = 0.10
-    @State private var draftVocalVariety: Double = 0.14
-    @State private var draftDelivery: Double = 0.10
-    @State private var draftVocabulary: Double = 0.10
-    @State private var draftStructure: Double = 0.10
-    @State private var draftRelevance: Double = 0.10
+    @State private var draftClarity: Double
+    @State private var draftPace: Double
+    @State private var draftFiller: Double
+    @State private var draftPause: Double
+    @State private var draftVocalVariety: Double
+    @State private var draftDelivery: Double
+    @State private var draftVocabulary: Double
+    @State private var draftStructure: Double
+    @State private var draftRelevance: Double
+
+    /// Drafts start at the stored weights. They used to start at constants
+    /// and jump on appear, which fired every slider's step haptic at once.
+    init(viewModel: SettingsViewModel) {
+        _viewModel = Bindable(viewModel)
+        _draftClarity = State(initialValue: viewModel.clarityWeight)
+        _draftPace = State(initialValue: viewModel.paceWeight)
+        _draftFiller = State(initialValue: viewModel.fillerWeight)
+        _draftPause = State(initialValue: viewModel.pauseWeight)
+        _draftVocalVariety = State(initialValue: viewModel.vocalVarietyWeight)
+        _draftDelivery = State(initialValue: viewModel.deliveryWeight)
+        _draftVocabulary = State(initialValue: viewModel.vocabularyWeight)
+        _draftStructure = State(initialValue: viewModel.structureWeight)
+        _draftRelevance = State(initialValue: viewModel.relevanceWeight)
+    }
 
     private var draftTotal: Double {
         draftClarity + draftPace + draftFiller + draftPause +
@@ -22,8 +37,18 @@ struct ScoreWeightsView: View {
         draftStructure + draftRelevance
     }
 
-    private var totalIsValid: Bool {
-        Int(round(draftTotal * 100)) == 100
+    /// Weights are relative: `SpeechService.calculateOverallScore` normalizes
+    /// them (`ScoreWeights.normalized`), so any mix is valid as long as one
+    /// skill counts at all. Save used to stay locked until nine sliders summed
+    /// to exactly 100%, which only restated what scoring already does.
+    private var canSave: Bool {
+        hasUnsavedChanges && draftTotal > 0.0001
+    }
+
+    /// A weight's share of the overall score, as the scorer will apply it.
+    private func share(_ weight: Double) -> Int {
+        guard draftTotal > 0 else { return 0 }
+        return Int((weight / draftTotal * 100).rounded())
     }
 
     private var hasUnsavedChanges: Bool {
@@ -52,17 +77,19 @@ struct ScoreWeightsView: View {
             AppBackground(style: .subtle)
 
             PageScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: AppLayout.chapterSpacing) {
                     introCard
                     weightVisualization
                     subscoreInfoSection
                     sliderSection
-                    saveButton
                     resetButton
                 }
                 .padding()
+                .labelStyle(.row)
             }
             .scrollIndicators(.hidden)
+            // Save rides under the sliders instead of eighteen rows below them.
+            .safeAreaBar(edge: .bottom) { saveBar }
         }
         .navigationTitle("Score Weights")
         .navigationBarTitleDisplayMode(.inline)
@@ -75,7 +102,7 @@ struct ScoreWeightsView: View {
                 syncDraftFromViewModel()
             }
         }
-        .alert("Reset to Defaults?", isPresented: $showingResetConfirmation) {
+        .alert("Reset weights?", isPresented: $showingResetConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) {
                 Haptics.success()
@@ -131,8 +158,7 @@ struct ScoreWeightsView: View {
     private var introCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Label("How your score works", systemImage: "function")
-                    .font(.headline)
+                GlassCardTitle("How your score works")
 
                 Text("Your overall score is built in two stages. First, 9 subscores are combined using your weights. Then a Substance Gate multiplies the result based on speech length and content depth, so short or empty responses always score low regardless of weights.")
                     .font(.subheadline)
@@ -146,8 +172,7 @@ struct ScoreWeightsView: View {
     private var weightVisualization: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Weight Distribution")
-                    .font(.subheadline.weight(.medium))
+                GlassCardTitle("Weight distribution")
 
                 GeometryReader { geo in
                     let items = weightItems
@@ -163,6 +188,7 @@ struct ScoreWeightsView: View {
                 }
                 .frame(height: 24)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+                .accessibilityHidden(true)
 
                 FlowLayout(spacing: 6) {
                     ForEach(weightItems) { item in
@@ -170,8 +196,9 @@ struct ScoreWeightsView: View {
                             Circle()
                                 .fill(item.color.opacity(0.8))
                                 .frame(width: 8, height: 8)
-                            Text("\(item.name) \(Int(item.weight * 100))%")
+                            Text("\(item.name) \(share(item.weight))%")
                                 .font(.caption2)
+                                .monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -183,47 +210,41 @@ struct ScoreWeightsView: View {
     // MARK: - Subscore Info
 
     private var subscoreInfoSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("What Each Score Measures", systemImage: "info.circle")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("What each score measures")
 
-            GlassCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(subscoreDescriptions.enumerated()), id: \.element.name) { index, desc in
-                        if index > 0 {
-                            Divider().padding(.vertical, 6)
+            GlassRowGroup(dividerInset: 14) {
+                ForEach(subscoreDescriptions, id: \.name) { desc in
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(desc.measures)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text("How: \(desc.howCalculated)")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 6)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Label(desc.name, systemImage: desc.icon)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
 
-                        DisclosureGroup {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(desc.measures)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                            Spacer()
 
-                                Text("How: \(desc.howCalculated)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary.opacity(0.7))
-                            }
-                            .padding(.top, 6)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: desc.icon)
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(AppColors.primary)
-                                    .frame(width: 20)
-
-                                Text(desc.name)
-                                    .font(.subheadline)
-
-                                Spacer()
-
-                                Text("\(Int(weightForSubscore(desc.key) * 100))%")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(AppColors.primary)
-                            }
+                            Text("\(share(weightForSubscore(desc.key)))%")
+                                .font(.caption.weight(.medium))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
                         }
-                        .tint(.secondary)
+                        .frame(minHeight: AppLayout.minHitTarget)
                     }
+                    .tint(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 2)
                 }
             }
         }
@@ -232,51 +253,55 @@ struct ScoreWeightsView: View {
     // MARK: - Sliders
 
     private var sliderSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Adjust Weights", systemImage: "slider.horizontal.3")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("Adjust weights")
 
             GlassCard {
-                VStack(spacing: 14) {
-                    weightSlider("Clarity", icon: "waveform", value: $draftClarity)
-                    weightSlider("Pace", icon: "speedometer", value: $draftPace)
-                    weightSlider("Filler Usage", icon: "text.badge.minus", value: $draftFiller)
-                    weightSlider("Pauses", icon: "pause.circle", value: $draftPause)
-                    weightSlider("Vocal Variety", icon: "waveform.path.ecg", value: $draftVocalVariety)
-                    weightSlider("Delivery", icon: "speaker.wave.3", value: $draftDelivery)
-                    weightSlider("Vocabulary", icon: "textformat.abc", value: $draftVocabulary)
-                    weightSlider("Structure", icon: "list.bullet.indent", value: $draftStructure)
-                    weightSlider("Relevance", icon: "target", value: $draftRelevance)
+                VStack(alignment: .leading, spacing: 14) {
+                    weightSlider("Clarity", icon: "waveform", tone: 0, value: $draftClarity)
+                    weightSlider("Pace", icon: "speedometer", tone: 1, value: $draftPace)
+                    weightSlider("Filler usage", icon: "text.badge.minus", tone: 2, value: $draftFiller)
+                    weightSlider("Pauses", icon: "pause.circle", tone: 3, value: $draftPause)
+                    weightSlider("Vocal variety", icon: "waveform.path.ecg", tone: 4, value: $draftVocalVariety)
+                    weightSlider("Delivery", icon: "speaker.wave.3", tone: 5, value: $draftDelivery)
+                    weightSlider("Vocabulary", icon: "textformat.abc", tone: 6, value: $draftVocabulary)
+                    weightSlider("Structure", icon: "list.bullet.indent", tone: 7, value: $draftStructure)
+                    weightSlider("Relevance", icon: "target", tone: 8, value: $draftRelevance)
 
                     Divider()
 
-                    totalRow
+                    Text(draftTotal > 0.0001
+                         ? "Weights are relative. Raising one lowers the share of every other skill; each percentage is that skill's share of your score."
+                         : "Give at least one skill some weight.")
+                        .font(.caption)
+                        .foregroundStyle(draftTotal > 0.0001 ? Color.secondary : AppColors.warning)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
     }
 
-    private func weightSlider(_ name: String, icon: String, value: Binding<Double>) -> some View {
+    /// `tone` matches the legend above, so a slider and its slice of the bar
+    /// read as the same thing.
+    private func weightSlider(_ name: String, icon: String, tone: Int, value: Binding<Double>) -> some View {
         VStack(spacing: 4) {
             HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 18)
-
-                Text(name)
+                Label(name, systemImage: icon)
                     .font(.caption.weight(.medium))
 
                 Spacer()
 
-                Text("\(Int(value.wrappedValue * 100))%")
+                Text("\(share(value.wrappedValue))%")
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 36, alignment: .trailing)
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, alignment: .trailing)
             }
+            .accessibilityHidden(true)
 
             Slider(value: value, in: 0.0...0.30, step: 0.01)
-                .tint(AppColors.primary)
+                .tint(AppColors.subscoreTone(tone))
+                .accessibilityLabel(name)
+                .accessibilityValue("\(share(value.wrappedValue)) percent of your score")
                 .onChange(of: value.wrappedValue) { _, _ in
                     didSave = false
                     Haptics.light()
@@ -284,58 +309,32 @@ struct ScoreWeightsView: View {
         }
     }
 
-    private var totalRow: some View {
-        let totalPercent = Int(round(draftTotal * 100))
-        return VStack(spacing: 6) {
-            HStack {
-                Text("Total")
-                    .font(.subheadline.weight(.medium))
-
-                Spacer()
-
-                Text("\(totalPercent)%")
-                    .font(.subheadline.weight(.bold).monospacedDigit())
-                    .foregroundStyle(totalIsValid ? Color.white : AppColors.warning)
-            }
-
-            if !totalIsValid {
-                Text("Total must equal 100% to save. Currently \(totalPercent > 100 ? "over" : "under") by \(abs(totalPercent - 100))%.")
-                    .font(.caption2)
-                    .foregroundStyle(AppColors.warning.opacity(0.8))
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: totalIsValid)
-    }
-
     // MARK: - Save
 
-    private var saveButton: some View {
-        VStack(spacing: 6) {
-            GlassButton(title: "Save weights", icon: "checkmark.circle", style: .primary) {
-                Haptics.success()
-                saveDraftToViewModel()
-                didSave = true
+    @ViewBuilder
+    private var saveBar: some View {
+        if hasUnsavedChanges || didSave {
+            VStack(spacing: 6) {
+                if hasUnsavedChanges {
+                    GlassButton(title: "Save weights", icon: "checkmark.circle", style: .primary, fullWidth: true) {
+                        Haptics.success()
+                        saveDraftToViewModel()
+                        didSave = true
+                    }
+                    .opacity(canSave ? 1.0 : 0.4)
+                    .disabled(!canSave)
+                } else {
+                    Label("Saved", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(AppColors.success)
+                        .frame(minHeight: AppLayout.minHitTarget)
+                }
             }
-            .opacity(hasUnsavedChanges && totalIsValid ? 1.0 : 0.4)
-            .disabled(!hasUnsavedChanges || !totalIsValid)
-
-            if didSave {
-                Text("Saved!")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(AppColors.success)
-                    .transition(.opacity)
-            } else if hasUnsavedChanges && !totalIsValid {
-                Text("Adjust weights to total 100% before saving.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else if hasUnsavedChanges {
-                Text("You have unsaved changes.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            .padding(.horizontal, AppLayout.pageHorizontal)
+            .padding(.bottom, 8)
+            .transition(.opacity)
+            .animation(.easeInOut(duration: 0.2), value: hasUnsavedChanges)
         }
-        .animation(.easeInOut(duration: 0.2), value: didSave)
-        .animation(.easeInOut(duration: 0.2), value: hasUnsavedChanges)
     }
 
     // MARK: - Reset
@@ -397,7 +396,7 @@ struct ScoreWeightsView: View {
                 howCalculated: "Gaussian comparison to your target WPM (wider tolerance ±30 WPM), with optional rate variation (18%) and fluency signals (14%) blended in when available."
             ),
             SubscoreDescription(
-                name: "Filler Usage", key: "filler", icon: "text.badge.minus",
+                name: "Filler usage", key: "filler", icon: "text.badge.minus",
                 measures: "How often you use filler words like 'um', 'uh', 'like', and 'you know'.",
                 howCalculated: "Uses a gentle logarithmic curve: occasional fillers (under 3%) barely affect the score, while frequent use lowers it progressively."
             ),
@@ -407,7 +406,7 @@ struct ScoreWeightsView: View {
                 howCalculated: "Evaluates pause length, placement between ideas, and penalizes hesitation pauses or rushing without pauses."
             ),
             SubscoreDescription(
-                name: "Vocal Variety", key: "vocalVariety", icon: "waveform.path.ecg",
+                name: "Vocal variety", key: "vocalVariety", icon: "waveform.path.ecg",
                 measures: "How dynamically you vary your pitch, volume, and speaking rate throughout your speech.",
                 howCalculated: "Combines pitch variation, volume dynamics, rate variation, and pitch-energy correlation scores."
             ),

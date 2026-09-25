@@ -456,7 +456,7 @@ class DrillViewModel {
             score = 0
             isComplete = true
             CurriculumActivitySignalStore.markDrillCompleted(mode.rawValue)
-            Haptics.warning()
+            // No haptic here: DrillResultView owns the result buzz (invariant 14a).
             return
         }
 

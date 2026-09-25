@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct DrillSelectionView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = DrillViewModel()
 
     /// The drill being run, and the only state the cover reads.
@@ -23,6 +24,11 @@ struct DrillSelectionView: View {
     /// Best score, runs and level per drill, re-read whenever a drill closes.
     /// They live in `UserDefaults`, which nothing observes.
     @State private var records: [DrillMode: DrillRecord] = [:]
+
+    /// Set once `initialMode` has opened its drill. `.task` runs again each
+    /// time this page reappears, and a full-screen cover closing is a
+    /// reappearance - without this, closing the drill launched it again.
+    @State private var didLaunchInitialMode = false
 
     var presentation: ToolPresentation = .sheet
 
@@ -52,8 +58,7 @@ struct DrillSelectionView: View {
                 SourceStoryBanner(
                     eyebrow: "Drilling from",
                     title: story.title.isEmpty ? "Untitled story" : story.title,
-                    tint: AppColors.categoryNeutralCool,
-                    trailingTag: "Impromptu"
+                    tint: AppColors.categoryNeutralCool
                 )
             }
 
@@ -69,14 +74,56 @@ struct DrillSelectionView: View {
                 }
             }
         }
-        .fullScreenCover(item: $activeDrill, onDismiss: loadRecords) { mode in
-            DrillFlowView(mode: mode, viewModel: viewModel)
+        .fullScreenCover(item: $activeDrill, onDismiss: drillClosed) { mode in
+            DrillFlowView(
+                mode: mode,
+                viewModel: viewModel,
+                // The rung `startDrill` will run: the highest one open.
+                roundSeconds: mode.durationSeconds(atLevel: DrillProgressStore.record(for: mode)?.level ?? 0)
+            )
         }
         .onAppear(perform: loadRecords)
         .task {
-            guard let initialMode else { return }
-            viewModel.preparePrompt(for: initialMode)
-            activeDrill = initialMode
+            guard !didLaunchInitialMode, let initialMode else { return }
+            didLaunchInitialMode = true
+            start(initialMode)
+        }
+    }
+
+    /// A drill opened for its caller - a result's next step, Today's focus
+    /// card - hands back to that caller when it closes. It used to land on the
+    /// full drill catalog, one more ✕ away from the result that prescribed it.
+    private func drillClosed() {
+        loadRecords()
+        if initialMode != nil { dismiss() }
+    }
+
+    private func start(_ mode: DrillMode) {
+        viewModel.preparePrompt(for: mode)
+        if let storyTopic, takesStoryTopic(mode) {
+            viewModel.impromptuPrompt = storyTopic
+        }
+        activeDrill = mode
+    }
+
+    // MARK: - Story
+
+    /// The story as the drill's topic: tell it, no script. "Drilling from" a
+    /// story used to be a banner only - every drill still drew a stock topic.
+    private var storyTopic: String? {
+        guard let sourceStory else { return nil }
+        let title = sourceStory.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty
+            ? "Tell your story in your own words, without the script"
+            : "Tell \u{201C}\(title)\u{201D} in your own words, without the script"
+    }
+
+    /// Drills that talk through a topic. Vocal Variety and Emphasis work one
+    /// scripted line, and Q&A answers a question, so they keep their own.
+    private func takesStoryTopic(_ mode: DrillMode) -> Bool {
+        switch mode {
+        case .fillerElimination, .paceControl, .pausePractice, .impromptuSprint: return true
+        case .vocalVariety, .emphasis, .qaSprint: return false
         }
     }
 
@@ -106,8 +153,7 @@ struct DrillSelectionView: View {
             tag: progressTag(for: mode, record: record)
         ) {
             Haptics.medium()
-            viewModel.preparePrompt(for: mode)
-            activeDrill = mode
+            start(mode)
         }
     }
 
@@ -131,6 +177,8 @@ struct DrillSelectionView: View {
 private struct DrillFlowView: View {
     let mode: DrillMode
     var viewModel: DrillViewModel
+    /// Named on the prep screen: the ladder changes it run to run.
+    let roundSeconds: Int
 
     @Environment(\.dismiss) private var dismiss
     @Query private var userSettings: [UserSettings]
@@ -147,7 +195,7 @@ private struct DrillFlowView: View {
                 countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
                 look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
                 backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
-                prepTitle: mode.title,
+                prepTitle: "\(mode.title) · \(roundSeconds)s",
                 prepSubtitle: viewModel.impromptuPrompt.isEmpty ? mode.description : viewModel.impromptuPrompt,
                 onComplete: {
                     viewModel.targetWPM = userSettings.first.resolvedTargetWPM

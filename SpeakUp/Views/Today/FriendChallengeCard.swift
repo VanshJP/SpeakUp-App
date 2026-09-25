@@ -31,10 +31,12 @@ struct FriendChallengeCard: View {
 
                     Spacer(minLength: 0)
 
+                    // Secondary: this card sits above the prompt card, and
+                    // Start speaking is the one white primary on Today.
                     GlassButton(
                         title: "Accept",
                         icon: "bolt.fill",
-                        style: .primary,
+                        style: .secondary,
                         size: .small
                     ) {
                         Haptics.medium()

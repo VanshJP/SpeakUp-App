@@ -9,127 +9,72 @@ struct AnalysisSettingsView: View {
             AppBackground(style: .subtle)
 
             PageScrollView {
-                VStack(spacing: 20) {
-                    GlassCard {
-                        VStack(spacing: 0) {
-                            Toggle(isOn: $viewModel.trackPauses) {
-                                Label("Track Pauses", systemImage: "pause.circle")
-                                    .font(.subheadline)
+                VStack(spacing: AppLayout.chapterSpacing) {
+                    // Each row explains itself; the paragraph that used to sit
+                    // under the card covered five rows at once.
+                    GlassRowGroup(dividerInset: Self.dividerInset) {
+                        toggleRow(
+                            "Track pauses",
+                            icon: "pause.circle",
+                            isOn: $viewModel.trackPauses,
+                            caption: "Scores how long you pause and where."
+                        )
+
+                        toggleRow(
+                            "Track filler words",
+                            icon: "text.bubble",
+                            isOn: $viewModel.trackFillerWords,
+                            caption: "Counts um, uh, like, and the rest of your filler list."
+                        )
+
+                        if viewModel.trackFillerWords {
+                            linkRow(
+                                "Filler words",
+                                icon: "text.badge.minus",
+                                caption: "Choose which words count as fillers."
+                            ) {
+                                EmptyView()
+                            } destination: {
+                                WordBankView(viewModel: viewModel, showDismissButton: false, initialTab: .fillers)
                             }
-                            .tint(AppColors.primary)
-                            .frame(minHeight: 40)
+                        }
 
-                            Divider().padding(.vertical, 8)
+                        toggleRow(
+                            "Auto pace target",
+                            icon: "wand.and.stars",
+                            isOn: $viewModel.autoPaceTarget,
+                            caption: "Learns your natural pace from every take. Turn it off to set your own."
+                        )
 
-                            Toggle(isOn: $viewModel.trackFillerWords) {
-                                Label("Track Filler Words", systemImage: "text.bubble")
-                                    .font(.subheadline)
+                        targetPaceRow
+
+                        linkRow(
+                            "Voice Profile",
+                            icon: "waveform.and.person.filled",
+                            caption: "Helps Big Talk pick out your voice."
+                        ) {
+                            Text(viewModel.voiceProfileStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } destination: {
+                            VoiceProfileView(viewModel: viewModel)
+                        }
+
+                        linkRow(
+                            "Score Weights",
+                            icon: "slider.horizontal.3",
+                            caption: "Choose what counts most in your overall score."
+                        ) {
+                            if viewModel.hasCustomWeights {
+                                StatusPill(text: "Custom", color: AppColors.primary)
                             }
-                            .tint(AppColors.primary)
-                            .frame(minHeight: 40)
-
-                            Divider().padding(.vertical, 8)
-
-                            Toggle(isOn: $viewModel.autoPaceTarget) {
-                                Label("Auto Pace Target", systemImage: "wand.and.stars")
-                                    .font(.subheadline)
-                            }
-                            .tint(AppColors.primary)
-                            .frame(minHeight: 40)
-
-                            if viewModel.autoPaceTarget {
-                                HStack {
-                                    Label("Target Pace", systemImage: "speedometer")
-                                        .font(.subheadline)
-                                    Spacer()
-                                    Text(viewModel.hasCalibratedWPM
-                                         ? "Learned: \(viewModel.displayTargetWPM) WPM"
-                                         : "Learning from your sessions…")
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(AppColors.primary)
-                                }
-                                .frame(minHeight: 40)
-                            } else {
-                                VStack(spacing: 8) {
-                                    HStack {
-                                        Label("Target Pace", systemImage: "speedometer")
-                                            .font(.subheadline)
-                                        Spacer()
-                                        Text("\(viewModel.targetWPM) WPM")
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(AppColors.primary)
-                                    }
-
-                                    Slider(
-                                        value: Binding(
-                                            get: { Double(viewModel.targetWPM) },
-                                            set: { viewModel.targetWPM = Int($0) }
-                                        ),
-                                        in: 100...200,
-                                        step: 5
-                                    )
-                                    .tint(AppColors.primary)
-                                }
-                                .frame(minHeight: 60)
-                            }
-
-                            Divider().padding(.vertical, 8)
-
-                            NavigationLink {
-                                VoiceProfileView(viewModel: viewModel)
-                            } label: {
-                                HStack {
-                                    Label("Voice Profile", systemImage: "waveform.badge.person.crop")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    Text(viewModel.voiceProfileSampleCount > 0
-                                         ? "\(viewModel.voiceProfileSampleCount) sample\(viewModel.voiceProfileSampleCount == 1 ? "" : "s")"
-                                         : "Not calibrated")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 40)
-                            }
-                            .buttonStyle(.plain)
-
-                            Divider().padding(.vertical, 8)
-
-                            NavigationLink {
-                                ScoreWeightsView(viewModel: viewModel)
-                            } label: {
-                                HStack {
-                                    Label("Score Weights", systemImage: "slider.horizontal.3")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if viewModel.hasCustomWeights {
-                                        Text("Custom")
-                                            .font(.caption2.weight(.medium))
-                                            .foregroundStyle(AppColors.primary)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 3)
-                                            .background { Capsule().fill(AppColors.primary.opacity(0.15)) }
-                                    }
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 40)
-                            }
-                            .buttonStyle(.plain)
+                        } destination: {
+                            ScoreWeightsView(viewModel: viewModel)
                         }
                     }
-
-                    Text("Analyze your speech patterns for pauses and filler words. Auto pace target learns your natural speaking rate from every recording; turn it off to set a fixed WPM target instead. Your voice profile is what it learns from. Score weights let you customize how each metric contributes to your overall score.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
                 }
                 .padding()
+                .labelStyle(.row)
             }
             .scrollIndicators(.hidden)
         }
@@ -159,5 +104,119 @@ struct AnalysisSettingsView: View {
             guard !viewModel.isSyncing else { return }
             Task { await viewModel.saveSettings() }
         }
+    }
+
+    // MARK: - Rows
+
+    /// Rules start under the row titles: 14pt row inset + the 24pt glyph
+    /// column + the 12pt gap of `RowLabelStyle`.
+    private static let dividerInset: CGFloat = 50
+    private static let captionIndent: CGFloat = 36
+
+    @ViewBuilder
+    private var targetPaceRow: some View {
+        if viewModel.autoPaceTarget {
+            row {
+                HStack {
+                    Label("Target pace", systemImage: "speedometer")
+                        .font(.subheadline)
+                    Spacer(minLength: 8)
+                    Text(viewModel.hasCalibratedWPM
+                         ? "Learned: \(viewModel.displayTargetWPM) WPM"
+                         : "Learning from your takes…")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        } else {
+            row {
+                HStack {
+                    Label("Target pace", systemImage: "speedometer")
+                        .font(.subheadline)
+                    Spacer(minLength: 8)
+                    Text("\(viewModel.targetWPM) WPM")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityHidden(true)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(viewModel.targetWPM) },
+                        set: { viewModel.targetWPM = Int($0) }
+                    ),
+                    in: 100...200,
+                    step: 5
+                )
+                .tint(AppColors.primary)
+                .accessibilityLabel("Target pace")
+                .accessibilityValue("\(viewModel.targetWPM) words per minute")
+            }
+        }
+    }
+
+    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            content()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
+    }
+
+    private func toggleRow(_ title: String, icon: String, isOn: Binding<Bool>, caption: String) -> some View {
+        row {
+            Toggle(isOn: isOn) {
+                Label(title, systemImage: icon)
+                    .font(.subheadline)
+            }
+            .tint(AppColors.primary)
+            .accessibilityHint(caption)
+
+            captionText(caption)
+        }
+    }
+
+    private func linkRow<Accessory: View, Destination: View>(
+        _ title: String,
+        icon: String,
+        caption: String,
+        @ViewBuilder accessory: () -> Accessory,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        NavigationLink {
+            destination()
+                .restoresNavigationBar()
+        } label: {
+            row {
+                HStack {
+                    Label(title, systemImage: icon)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 8)
+                    accessory()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+
+                captionText(caption)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RowPressStyle())
+        .accessibilityHint(caption)
+    }
+
+    private func captionText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, Self.captionIndent)
+            .accessibilityHidden(true)
     }
 }

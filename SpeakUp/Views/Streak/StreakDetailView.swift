@@ -87,7 +87,7 @@ struct StreakDetailView: View {
                 milestoneCard
                 calendarCard
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppLayout.pageHorizontal)
             .padding(.top, 8)
             .padding(.bottom, 40)
         }
@@ -97,6 +97,8 @@ struct StreakDetailView: View {
         .navigationTitle("Streak")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        // Pushed from Today, whose root hides the bar (ui-design-system rule 9).
+        .restoresNavigationBar()
         .task {
             let container = modelContext.container
             let payload = await Task.detached(priority: .userInitiated) {
@@ -146,10 +148,8 @@ struct StreakDetailView: View {
                     .shadow(color: isLit ? AppColors.warning.opacity(0.55) : .clear, radius: 14, y: 4)
                     .contentTransition(.numericText(value: Double(currentStreak)))
 
-                Text("DAY STREAK")
-                    .font(.caption.weight(.heavy))
-                    .tracking(4)
-                    .foregroundStyle(.white.opacity(isLit ? 0.7 : 0.45))
+                Text("Day streak")
+                    .eyebrowStyle(.white.opacity(isLit ? 0.7 : 0.45))
 
                 if longestStreak > currentStreak {
                     Text("Best \(longestStreak) days")
@@ -168,13 +168,12 @@ struct StreakDetailView: View {
     private var freezeProtectionCard: some View {
         GlassCard(tint: AppColors.primary.opacity(0.06)) {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Streak freezes", systemImage: "snowflake")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                GlassCardTitle("Streak freezes", icon: "snowflake")
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(freezesAvailable)")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(.white)
                         .contentTransition(.numericText(value: Double(freezesAvailable)))
 
@@ -221,32 +220,15 @@ struct StreakDetailView: View {
         } label: {
             GlassCard(tint: AppColors.warning.opacity(0.06)) {
                 VStack(alignment: .leading, spacing: 14) {
-                    HStack {
-                        Label("Next milestone", systemImage: "target")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Spacer()
+                    GlassCardTitle("Next milestone", icon: "target") {
                         Text("\(currentStreak) / \(nextMilestone)")
                             .font(.caption.weight(.semibold))
+                            .monospacedDigit()
                             .foregroundStyle(.white.opacity(0.6))
                     }
 
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.08))
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [AppColors.warning.opacity(0.85), AppColors.warning, AppColors.error.opacity(0.85)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: max(8, geo.size.width * milestoneProgress))
-                        }
-                    }
-                    .frame(height: 10)
+                    TickMeter(fraction: milestoneProgress, color: AppColors.warning)
+                        .frame(height: 10)
 
                     let remaining = max(0, nextMilestone - currentStreak)
                     Text(remaining == 0
@@ -281,7 +263,7 @@ struct StreakDetailView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
     }
 
@@ -291,9 +273,7 @@ struct StreakDetailView: View {
     private var calendarCard: some View {
         GlassCard(tint: AppColors.primary.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 14) {
-                Label("Last 14 days", systemImage: "calendar")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                GlassCardTitle("Last 14 days", icon: "calendar")
 
                 HStack(spacing: 6) {
                     ForEach(lastFourteenDays) { day in
@@ -331,6 +311,11 @@ struct StreakDetailView: View {
                                 .foregroundStyle(.white.opacity(0.55))
                         }
                         .frame(maxWidth: .infinity)
+                        // One stop per day. Uncombined, VoiceOver read the
+                        // letter, the glyph and the number as three swipes
+                        // and never said whether the day was practised.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(day.accessibilityLabel)
                     }
                 }
             }
@@ -373,6 +358,12 @@ struct StreakDetailView: View {
 
         var dayNumber: String {
             Self.dayNumberFormatter.string(from: date)
+        }
+
+        var accessibilityLabel: String {
+            let name = date.formatted(.dateTime.weekday(.wide).month(.wide).day())
+            let state = practiced ? "practised" : (frozen ? "covered by a freeze" : "no practice")
+            return isToday ? "Today, \(name), \(state)" : "\(name), \(state)"
         }
     }
 

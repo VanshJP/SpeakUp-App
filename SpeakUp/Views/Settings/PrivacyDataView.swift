@@ -6,7 +6,6 @@ import SwiftUI
 /// Answers collapse rather than sitting open: a screen of open paragraphs is a
 /// document, and nobody reads a document.
 struct PrivacyDataView: View {
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
@@ -14,57 +13,48 @@ struct PrivacyDataView: View {
 
             PageScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    GlassSectionHeader("Questions", icon: "questionmark.circle")
+                    GlassSectionHeader("Questions")
 
                     questionsCard
 
                     if !Self.legalRows.isEmpty {
-                        GlassSectionHeader("Legal & support", icon: "link")
+                        GlassSectionHeader("Legal & support")
                             .padding(.top, 4)
 
                         legalCard
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding()
+                .labelStyle(.row)
             }
             .scrollIndicators(.hidden)
             .tint(.secondary)
         }
         .navigationTitle("Privacy & Data")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
-            }
-        }
     }
 
     // MARK: - Entries
 
     private var questionsCard: some View {
-        GlassCard(padding: 14) {
-            VStack(spacing: 0) {
-                ForEach(Array(Self.entries.enumerated()), id: \.element.question) { index, entry in
-                    if index > 0 {
-                        Divider().padding(.vertical, 8)
-                    }
-
-                    DisclosureGroup {
-                        Text(entry.answer)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 6)
-                    } label: {
-                        Text(entry.question)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+        GlassRowGroup(dividerInset: 14) {
+            ForEach(Self.entries, id: \.question) { entry in
+                DisclosureGroup {
+                    Text(entry.answer)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 6)
+                } label: {
+                    Text(entry.question)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 2)
             }
         }
     }
@@ -72,38 +62,33 @@ struct PrivacyDataView: View {
     // MARK: - Legal
 
     private var legalCard: some View {
-        GlassCard(padding: 14) {
-            VStack(spacing: 0) {
-                ForEach(Array(Self.legalRows.enumerated()), id: \.offset) { index, row in
-                    if index > 0 {
-                        Divider().padding(.vertical, 8)
-                    }
-                    linkRow(row.title, icon: row.icon, url: row.url)
-                }
+        // Rules start under the titles: 14pt inset + 24pt glyph + 12pt gap.
+        GlassRowGroup(dividerInset: 50) {
+            ForEach(Array(Self.legalRows.enumerated()), id: \.offset) { _, row in
+                linkRow(row.title, icon: row.icon, url: row.url)
             }
         }
     }
 
     private func linkRow(_ title: String, icon: String, url: URL) -> some View {
         Link(destination: url) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.body)
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 24)
-
-                Text(title)
+            HStack(spacing: 8) {
+                Label(title, systemImage: icon)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 Image(systemName: "arrow.up.right")
-                    .font(.caption2)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
             .contentShape(.rect)
         }
+        .buttonStyle(RowPressStyle())
     }
 
     // MARK: - Content
@@ -160,8 +145,9 @@ struct PrivacyDataView: View {
             question: "Can I delete my data?",
             answer: """
             Yes, always. Swipe any session in History to delete it, or erase \
-            every recording, goal, achievement, and lesson at once from \
-            Settings, under Data Management.
+            everything at once from Settings, under Data Management: your \
+            recordings, stories, custom prompts, word lists, voice profile, \
+            goals, achievements, and lesson progress.
             """
         ),
         Entry(

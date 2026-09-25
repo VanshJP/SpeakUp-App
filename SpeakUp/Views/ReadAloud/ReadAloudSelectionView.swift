@@ -143,7 +143,7 @@ struct ReadAloudSelectionView: View {
         let saved = savedPassages
         if !saved.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Your passages", icon: "bookmark.fill") {
+                GlassSectionHeader("Your passages") {
                     Text("\(saved.count)")
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -168,17 +168,14 @@ struct ReadAloudSelectionView: View {
 
     private var addPassageCard: some View {
         Button {
+            // The toolbar `+` plays its own tap, so the shared
+            // `presentComposer` does not.
+            Haptics.light()
             presentComposer()
         } label: {
             GlassCard(padding: 13) {
                 VStack(spacing: 8) {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(AppColors.toolReadAloud)
-                        .frame(width: 38, height: 38)
-                        .background {
-                            Circle().fill(AppColors.toolReadAloud.opacity(0.14))
-                        }
+                    IconChip(icon: "plus", tint: AppColors.toolReadAloud, size: 38)
 
                     Text("Add your own")
                         .font(.caption.weight(.semibold))
@@ -224,42 +221,48 @@ struct ReadAloudSelectionView: View {
         }
     }
 
+    /// The card starts practice; the actions menu floats over its trailing
+    /// edge as a sibling, never inside the card's label, so a tap reaches
+    /// one or the other. The card lights up rather than scaling: a scale
+    /// would slide it out from under the menu that sits on it.
     private func savedPassageCard(_ passage: ReadAloudPassage) -> some View {
         GlassCard(padding: 0) {
-            HStack(spacing: 0) {
-                Button {
-                    practice(passage)
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 7) {
-                            Image(systemName: "bookmark.fill")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AppColors.toolReadAloud)
-                            Text(passage.title)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Spacer(minLength: 0)
-                        }
-
-                        Text(passage.text)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
-
-                        Text("\(passage.wordCount) words · \(Self.estimatedTime(passage.wordCount))")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(AppColors.difficultyColor(passage.difficulty))
+            Button {
+                practice(passage)
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "bookmark.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColors.toolReadAloud)
+                        Text(passage.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-                    .padding(13)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    "\(passage.title). \(passage.wordCount) words. \(passage.text)"
-                )
 
+                    Text(passage.text)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+
+                    Text("\(passage.wordCount) words · \(Self.estimatedTime(passage.wordCount))")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppColors.difficultyColor(passage.difficulty))
+                }
+                .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+                .padding(13)
+                // Room for the menu over the trailing edge.
+                .padding(.trailing, AppLayout.minHitTarget + 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(RowPressStyle())
+            .clipShape(.rect(cornerRadius: 20))
+            .accessibilityLabel(
+                "\(passage.title). \(passage.wordCount) words. \(passage.text)"
+            )
+            .overlay(alignment: .trailing) {
                 Menu {
                     Button {
                         presentComposer(editing: passage)
@@ -291,7 +294,6 @@ struct ReadAloudSelectionView: View {
         composerInitialText = passage?.text ?? ""
         editingSavedText = passage?.text
         showingComposer = true
-        Haptics.light()
     }
 
     private func saveCustomText(_ text: String) {

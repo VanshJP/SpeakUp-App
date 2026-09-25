@@ -3,10 +3,13 @@ import SwiftUI
 struct VoiceCalibrationView: View {
     @Environment(AudioService.self) private var audioService
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     var onComplete: (VoiceProfile) -> Void
 
     @State private var phase: CalibrationPhase = .ready
     @State private var errorMessage: String?
+    /// The error is a permission iOS holds, so the fix lives in Settings.
+    @State private var errorNeedsSettings = false
     @State private var wordTracker = ReadAloudService()
     @State private var lastAutoScrolledIndex = 0
     /// Cleared on disappear, so a start still awaiting permission or the mic
@@ -48,20 +51,22 @@ struct VoiceCalibrationView: View {
                         statusSection
                         actionButtons
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, AppLayout.pageHorizontal)
                     .padding(.bottom, 32)
                 }
                 .scrollIndicators(.hidden)
             }
+            .navigationTitle("Voice Calibration")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    if phase != .success && phase != .analyzing {
-                        Button("Cancel") {
+                // The one way out. The in-page button while reading is
+                // "Start over", so two different "Cancel"s no longer compete.
+                ToolbarItem(placement: .topBarLeading) {
+                    if phase != .analyzing {
+                        Button(role: .close) {
                             if phase == .recording { cancelCalibration() }
                             dismiss()
                         }
-                        .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -85,18 +90,12 @@ struct VoiceCalibrationView: View {
     // MARK: - Subviews
 
     private var headerSection: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "waveform.badge.person.crop")
-                .font(.system(size: 44))
-                .foregroundStyle(AppColors.primary)
-
-            Text("Voice Calibration")
-                .font(.title2.bold())
-                .foregroundStyle(.white)
+        VStack(spacing: 12) {
+            IconChip(icon: "waveform.and.person.filled", tint: AppColors.primary, size: 56)
 
             Text(phase == .ready
                  ? "Read the passage below at your natural pace. Big Talk will listen and build your voice profile."
-                 : "Read each word aloud, they'll highlight as you go.")
+                 : "Read each word aloud. They light up as you go.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -108,9 +107,8 @@ struct VoiceCalibrationView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Label("Read aloud", systemImage: "text.quote")
-                        .font(.caption.bold())
-                        .foregroundStyle(AppColors.primary)
+                    Text("Read aloud")
+                        .eyebrowStyle()
                     Spacer()
                     if phase == .recording {
                         Text("\(wordTracker.currentWordIndex)/\(passageWords.count)")
@@ -132,23 +130,10 @@ struct VoiceCalibrationView: View {
         }
     }
 
+    /// Determinate progress is a `TickMeter`, the app's one measured bar.
     private var progressBar: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.1))
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.primary, AppColors.categoryBrandBright],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: geo.size.width * wordTracker.progressPercentage)
-                    .animation(.easeInOut(duration: 0.3), value: wordTracker.progressPercentage)
-            }
-        }
-        .frame(height: 4)
+        TickMeter(fraction: wordTracker.progressPercentage, color: AppColors.primary)
+            .frame(height: 10)
     }
 
     private var highlightedPassage: some View {
@@ -174,7 +159,7 @@ struct VoiceCalibrationView: View {
         let state: WordMatchState = index < states.count ? states[index] : .upcoming
 
         return Text(word)
-            .font(.system(size: 18, weight: state == .current ? .bold : .regular))
+            .font(.body.weight(state == .current ? .bold : .regular))
             .foregroundStyle(wordColor(for: state))
             .padding(.vertical, 2)
             .padding(.horizontal, 2)
@@ -204,14 +189,14 @@ struct VoiceCalibrationView: View {
                         .fill(AppColors.recording)
                         .frame(width: 8, height: 8)
                         .pulsingGlow(color: AppColors.recording, isActive: true)
-                    Text("Listening...")
+                    Text("Listening…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             } else if phase == .analyzing {
                 VoiceLoader(size: .large)
                     .foregroundStyle(AppColors.primary)
-                Text("Analyzing your voice...")
+                Text("Analyzing your voice…")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if phase == .success {
@@ -232,6 +217,14 @@ struct VoiceCalibrationView: View {
                     .font(.caption)
                     .foregroundStyle(AppColors.error)
                     .multilineTextAlignment(.center)
+
+                if errorNeedsSettings {
+                    GlassButton(title: "Open Settings", icon: "gear", style: .secondary, size: .small) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                }
             }
         }
         .frame(minHeight: phase == .ready ? 0 : 80)
@@ -252,7 +245,8 @@ struct VoiceCalibrationView: View {
                         finishCalibration()
                     }
                 }
-                GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium, fullWidth: true) {
+                GlassButton(title: "Start over", icon: "arrow.counterclockwise", style: .secondary, size: .medium, fullWidth: true) {
+                    Haptics.light()
                     cancelCalibration()
                 }
             }
@@ -269,6 +263,7 @@ struct VoiceCalibrationView: View {
 
     private func startCalibration() {
         errorMessage = nil
+        errorNeedsSettings = false
         Haptics.heavy()
         wordTracker.configure(passage: calibrationPassage)
         lastAutoScrolledIndex = 0
@@ -276,7 +271,8 @@ struct VoiceCalibrationView: View {
         Task {
             let authorized = await wordTracker.requestAuthorization()
             guard authorized else {
-                errorMessage = "Speech recognition permission is required. Enable it in Settings."
+                errorMessage = "Big Talk needs speech recognition to follow your reading. Turn it on in Settings."
+                errorNeedsSettings = true
                 return
             }
 
@@ -291,7 +287,8 @@ struct VoiceCalibrationView: View {
                 try wordTracker.start()
                 phase = .recording
             } catch {
-                errorMessage = "Could not access microphone. Check permissions in Settings."
+                errorMessage = "Couldn't start the microphone. If Big Talk isn't allowed to use it, turn it on in Settings."
+                errorNeedsSettings = true
             }
         }
     }

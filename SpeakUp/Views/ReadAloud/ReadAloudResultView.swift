@@ -7,6 +7,10 @@ struct ReadAloudResultView: View {
     /// Runs a short passage built from this take: the stumbles, or the words
     /// behind one sound to check. Nil hides both practice buttons.
     var onPractice: ((ReadAloudPassage) -> Void)?
+    /// Set only when this take was a drill: back to the passage it came from.
+    /// Without it a drill was a dead end - Retry repeated the drill and Done
+    /// left, so the fix was never checked on the full read.
+    var onReadFullPassage: (() -> Void)?
 
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
@@ -37,14 +41,18 @@ struct ReadAloudResultView: View {
                         soundsSection
 
                         wordReviewSection
-
-                        actions
-                            .padding(.top, 4)
-                            .padding(.bottom, 32)
                     }
                     .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
                 }
                 .scrollIndicators(.hidden)
+                // The next rep is always one tap away: these sat under the
+                // whole word review, a long scroll on any real passage.
+                .safeAreaBar(edge: .bottom) {
+                    actions
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                }
             }
         }
         .sheet(item: $selectedWord) { detail in
@@ -68,18 +76,10 @@ struct ReadAloudResultView: View {
 
             HStack {
                 Spacer()
-                Button {
+                GlassButton(title: "Done", style: .secondary, size: .small) {
                     Haptics.light()
                     onDone()
-                } label: {
-                    Text("Done")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: AppLayout.minHitTarget)
-                        .glassBackground(cornerRadius: AppLayout.minHitTarget / 2)
                 }
-                .buttonStyle(GlassPressStyle())
             }
         }
         .padding(.horizontal, 20)
@@ -169,7 +169,7 @@ struct ReadAloudResultView: View {
     }
 
     private func noticeCard(_ notice: String) -> some View {
-        GlassCard(tint: AppColors.warning.opacity(0.08), padding: 14) {
+        GlassCard(tint: AppColors.warning.opacity(0.06), padding: 14) {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(AppColors.warning)
@@ -188,13 +188,21 @@ struct ReadAloudResultView: View {
 
     private var actions: some View {
         VStack(spacing: 12) {
-            GlassButton(title: "Try again", icon: "arrow.clockwise", style: .primary, size: .large, fullWidth: true) {
+            GlassButton(title: "Try again", icon: "arrow.clockwise", style: .primary, fullWidth: true) {
                 Haptics.medium()
                 onRetry()
             }
 
-            if let misses = result.missedPhrasesText, onPractice != nil {
-                GlassButton(title: "Drill what you missed", icon: "target", style: .secondary, size: .large, fullWidth: true) {
+            // A drill's own misses are a near-copy of Try again, so a drill's
+            // result offers the step the loop was missing instead.
+            if let onReadFullPassage {
+                GlassButton(title: "Read full passage", icon: "text.alignleft", style: .secondary, fullWidth: true) {
+                    Haptics.medium()
+                    onReadFullPassage()
+                }
+                .accessibilityHint("Reads the whole passage this drill came from")
+            } else if let misses = result.missedPhrasesText, onPractice != nil {
+                GlassButton(title: "Drill what you missed", icon: "target", style: .secondary, fullWidth: true) {
                     practice(misses)
                 }
                 .accessibilityHint("Reads only the phrases you missed or skipped")
@@ -222,8 +230,7 @@ struct ReadAloudResultView: View {
         let patterns = Array(result.soundCheck.patterns.prefix(3))
         if !patterns.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Sounds to check", systemImage: "mouth")
-                    .font(.headline)
+                GlassSectionHeader("Sounds to check")
 
                 Text("Read from the words we heard instead of the ones on the page. Recognition can mishear, so treat these as places to listen.")
                     .font(.caption)
@@ -241,13 +248,11 @@ struct ReadAloudResultView: View {
     private func soundPatternCard(_ pattern: SoundPattern) -> some View {
         GlassCard(tint: AppColors.error.opacity(0.06), padding: 14) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(pattern.title)
-                        .font(.headline)
+                GlassCardTitle(pattern.title) {
                     Text(pattern.summary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
+                        .multilineTextAlignment(.trailing)
                 }
 
                 WrappingHStack(spacing: 14, lineSpacing: 6) {
@@ -303,8 +308,7 @@ struct ReadAloudResultView: View {
 
     private var wordReviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Word review", systemImage: "doc.text.magnifyingglass")
-                .font(.headline)
+            GlassSectionHeader("Word review")
 
             // Wraps rather than squeezing four labels onto one line.
             FlowLayout(spacing: 14) {
@@ -336,6 +340,7 @@ struct ReadAloudResultView: View {
                                 selectedWord = WordDetail(word: word, index: index, state: state)
                             }
                             .accessibilityLabel(reviewWordLabel(word, index: index, state: state))
+                            .accessibilityAddTraits(state.isSettled ? .isButton : [])
                     }
                 }
             }
@@ -401,9 +406,12 @@ struct ReadAloudResultView: View {
         result.timeTaken.minutesSeconds
     }
 
+    /// Words actually said over reading time. `mismatchedWords` also counts
+    /// skips, and a skipped line was never spoken - counting it read as a
+    /// reader rushing when they had jumped ahead.
     private var paceLabel: String? {
         guard result.timeTaken > 5 else { return nil }
-        let spoken = result.matchedWords + result.mismatchedWords
+        let spoken = result.wordStates.filter { $0.isSettled && $0 != .skipped }.count
         let wpm = Double(spoken) / (result.timeTaken / 60)
         return "\(Int(wpm.rounded())) wpm · target ≈150"
     }
@@ -430,8 +438,7 @@ private struct StatBadge: View {
                     .foregroundStyle(color)
 
                 Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .monospacedDigit()
+                    .font(.metricValue)
                     .foregroundStyle(.white)
 
                 Text(label)

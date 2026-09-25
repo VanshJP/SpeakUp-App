@@ -39,6 +39,8 @@ struct DrillSessionView: View {
 
                 if viewModel.isActive {
                     bottomControls
+                } else if viewModel.isAnalyzingPitch {
+                    scoringIndicator
                 }
             }
             .padding(.horizontal, 16)
@@ -110,12 +112,14 @@ struct DrillSessionView: View {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.title2.weight(.semibold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(.ultraThinMaterial))
+                    .glassCircle()
             }
+            .buttonStyle(.plain)
             .disabled(viewModel.isAnalyzingPitch)
+            .opacity(viewModel.isAnalyzingPitch ? 0.4 : 1)
             .accessibilityLabel(viewModel.isAnalyzingPitch ? "Scoring pitch" : "End drill")
             .confirmationDialog(
                 "End this drill?",
@@ -207,6 +211,22 @@ struct DrillSessionView: View {
         .padding(.bottom, 8)
     }
 
+    /// Vocal Variety scores after the stop. The record button's slot says so
+    /// while it works - it used to empty, leaving a frozen clock and a caption.
+    private var scoringIndicator: some View {
+        VStack(spacing: 12) {
+            VoiceLoader(size: .large)
+                .foregroundStyle(.white)
+
+            Text("Scoring pitch…")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Scoring pitch")
+    }
+
     // MARK: - Mode Displays
 
     /// The topic, and the technique to use on it. The habit drills used to
@@ -231,14 +251,7 @@ struct DrillSessionView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-                }
-        )
+        .glassCard(cornerRadius: 16)
     }
 
     private var fillerDisplay: some View {
@@ -277,7 +290,7 @@ struct DrillSessionView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .glassEffect(.regular, in: .capsule)
         }
     }
 
@@ -308,19 +321,16 @@ struct DrillSessionView: View {
                     .foregroundStyle(viewModel.pauseMarkerActive ? AppColors.warning : AppColors.categoryBrandBright)
                     .contentTransition(.symbolEffect(.replace))
 
-                Text(viewModel.pauseMarkerActive ? "PAUSE NOW" : "Keep Speaking")
+                Text(viewModel.pauseMarkerActive ? "Pause now" : "Keep speaking")
                     .font(.title3.weight(.bold))
                     .foregroundStyle(viewModel.pauseMarkerActive ? AppColors.warning : .white)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule().fill(viewModel.pauseMarkerActive ? AppColors.warning.opacity(0.12) : .clear)
-                    }
-            )
+            .background {
+                Capsule().fill(AppColors.warning.opacity(viewModel.pauseMarkerActive ? 0.12 : 0))
+            }
+            .glassEffect(.regular, in: .capsule)
             .animation(.easeInOut(duration: 0.25), value: viewModel.pauseMarkerActive)
 
             HStack(spacing: 8) {
@@ -343,10 +353,8 @@ struct DrillSessionView: View {
     private var promptedDisplay: some View {
         VStack(spacing: 12) {
             if let beat = viewModel.structureBeat {
-                Text(beat.uppercased())
-                    .font(.caption.weight(.bold))
-                    .tracking(1.2)
-                    .foregroundStyle(AppColors.categoryCopper)
+                Text(beat)
+                    .eyebrowStyle(AppColors.categoryCopper)
             }
 
             Text(viewModel.impromptuPrompt)
@@ -361,26 +369,19 @@ struct DrillSessionView: View {
                         .font(.caption)
                         .foregroundStyle(AppColors.warning)
                     Text("\(viewModel.liveFillerCount) filler\(viewModel.liveFillerCount == 1 ? "" : "s")")
-                        .font(.caption.weight(.medium))
+                        .font(.caption.weight(.medium).monospacedDigit())
                         .foregroundStyle(AppColors.warning)
                         .contentTransition(.numericText())
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(.ultraThinMaterial))
+                .onCardCapsule()
                 .transition(.scale.combined(with: .opacity))
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-                }
-        )
+        .glassCard(cornerRadius: 16)
         .animation(.easeOut(duration: 0.2), value: viewModel.liveFillerCount)
     }
 
@@ -395,13 +396,13 @@ struct DrillSessionView: View {
             HStack(spacing: 8) {
                 Image(systemName: "waveform.path.ecg")
                     .foregroundStyle(AppColors.categoryTeal)
-                Text(viewModel.isAnalyzingPitch ? "Scoring pitch…" : "Vary your pitch. Glide low to high")
+                Text("Vary your pitch. Glide low to high")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.white.opacity(0.75))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .onCardCapsule()
 
             if viewModel.liveEnergySwing > 0 {
                 Text(String(format: "Energy swing %.0f dB", viewModel.liveEnergySwing))
@@ -411,14 +412,7 @@ struct DrillSessionView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-                }
-        )
+        .glassCard(cornerRadius: 16)
     }
 
     private var emphasisDisplay: some View {
@@ -436,7 +430,7 @@ struct DrillSessionView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .onCardCapsule()
 
             if viewModel.liveEnergySwing > 0 {
                 Text(String(format: "Swing %.0f dB", viewModel.liveEnergySwing))
@@ -446,14 +440,7 @@ struct DrillSessionView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-                }
-        )
+        .glassCard(cornerRadius: 16)
     }
 
     @ViewBuilder
@@ -490,5 +477,16 @@ private struct DrillWaveform: View {
 
     var body: some View {
         CircularWaveformView(audioLevel: viewModel.audioLevel, style: style)
+    }
+}
+
+// MARK: - On-card capsule
+
+private extension View {
+    /// A capsule on a glass card is painted, never glass: glass laid on glass
+    /// samples the plate instead of the canvas (ui-design-system rule 13b).
+    func onCardCapsule() -> some View {
+        background { Capsule().fill(Color.white.opacity(0.10)) }
+            .overlay { Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
     }
 }

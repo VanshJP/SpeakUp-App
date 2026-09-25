@@ -41,6 +41,24 @@ class HistoryViewModel {
     /// strip and contribution graph - no view read them any more.
     var aggregatedVocab: [VocabCount] = []
 
+    /// Takes that carry a score. Compare and Listen back need two: counting
+    /// every summary let a processing or failed take open them onto a zero
+    /// score or an empty sheet.
+    var scoredTakeCount: Int {
+        summaries.reduce(0) { $0 + ($1.overallScore == nil ? 0 : 1) }
+    }
+
+    /// Changes when a take is added, removed, or finishes scoring. The
+    /// Progress charts reload on a change instead of on every appearance.
+    var progressFingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(summaries.count)
+        hasher.combine(scoredTakeCount)
+        hasher.combine(summaries.first?.id)
+        hasher.combine(summaries.first?.overallScore)
+        return hasher.finalize()
+    }
+
     private var modelContext: ModelContext?
     private var container: ModelContainer?
     /// The reload in flight, if any. History appears after every take and on

@@ -12,11 +12,9 @@ struct ListenBackEncouragementView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Image(systemName: "headphones")
-                    .font(.system(size: 56))
-                    .foregroundStyle(AppColors.primary)
+                IconChip(icon: "headphones", size: 72)
 
-                Text("About Hearing Your Voice")
+                Text("About hearing your voice")
                     .font(.title3.weight(.bold))
                     .accessibilityFocused($titleFocused)
 
@@ -35,22 +33,22 @@ struct ListenBackEncouragementView: View {
                     onContinue()
                 }
 
-                Button("Not now") {
+                Button {
                     Haptics.light()
                     onCancel()
+                } label: {
+                    Text("Not now")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget)
+                        .contentShape(Rectangle())
                 }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .buttonStyle(GlassPressStyle())
             }
             .padding(24)
-            .background {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(.ultraThickMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    }
-            }
+            // Liquid Glass like every other plate; a material slab with a
+            // hairline rim read as a flat grey card over the dimmed page.
+            .glassEffect(.regular, in: .rect(cornerRadius: 24, style: .continuous))
             .padding(32)
         }
         .accessibilityElement(children: .contain)

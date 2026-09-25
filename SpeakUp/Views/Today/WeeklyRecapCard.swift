@@ -105,20 +105,7 @@ struct WeeklyRecapCard: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "calendar")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Text("This week vs last")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.92))
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 8)
-
+        GlassCardTitle("This week vs last", icon: "calendar") {
             DismissButton(label: "Dismiss weekly recap", action: onDismiss)
         }
     }

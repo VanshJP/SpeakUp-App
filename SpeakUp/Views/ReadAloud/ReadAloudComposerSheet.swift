@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 nonisolated struct ReadAloudTextReplacement {
     let text: String
@@ -18,10 +17,10 @@ struct ReadAloudComposerSheet: View {
     @State private var showingDictionary = false
     @State private var showingFileImporter = false
     @State private var isImporting = false
-    @State private var clipboardHasText = false
     @State private var sourceNote: String?
     @State private var errorMessage: String?
     @State private var pendingReplacement: ReadAloudTextReplacement?
+    @State private var showingDiscardConfirm = false
     @FocusState private var textFieldFocused: Bool
 
     init(
@@ -68,6 +67,12 @@ struct ReadAloudComposerSheet: View {
         canUseText && PronunciationService.canDefine(trimmedText)
     }
 
+    /// Anything typed, pasted or imported that Save has not kept. A swipe
+    /// down used to throw it away without a word.
+    private var isDirty: Bool {
+        trimmedText != initialText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         NavigationStack {
             PageScrollView {
@@ -76,22 +81,40 @@ struct ReadAloudComposerSheet: View {
                     sourceActions
                     editor
                     previewActions
-                    saveActions
                 }
                 .padding(20)
             }
             .scrollDismissesKeyboard(.interactively)
+            // Pinned, so Save rides above the keyboard. The editor takes
+            // focus on open, and the buttons used to sit under it.
+            .safeAreaBar(edge: .bottom) {
+                saveActions
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+            }
             .navigationTitle(isEditing ? "Edit Passage" : "Add Your Passage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        pronunciationService.stop()
-                        onCancel()
+                        if isDirty {
+                            showingDiscardConfirm = true
+                        } else {
+                            close()
+                        }
+                    }
+                    .confirmationDialog(
+                        isEditing ? "Discard your changes?" : "Discard this passage?",
+                        isPresented: $showingDiscardConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Discard", role: .destructive) { close() }
+                        Button("Keep Editing", role: .cancel) {}
                     }
                 }
             }
         }
+        .interactiveDismissDisabled(isDirty)
         .appBackground(.subtle)
         .fileImporter(
             isPresented: $showingFileImporter,
@@ -133,7 +156,6 @@ struct ReadAloudComposerSheet: View {
             Text(errorMessage ?? "")
         }
         .onAppear {
-            clipboardHasText = UIPasteboard.general.hasStrings
             if initialText.isEmpty {
                 textFieldFocused = true
             }
@@ -158,29 +180,33 @@ struct ReadAloudComposerSheet: View {
 
     private var sourceActions: some View {
         HStack(spacing: 10) {
-            GlassButton(
-                title: "Paste",
-                icon: "doc.on.clipboard",
-                style: .secondary,
-                size: .small,
-                fullWidth: true
-            ) {
-                pasteFromClipboard()
+            // The system paste control: reading `UIPasteboard` from our own
+            // button raised iOS's "Allow Paste" alert on every tap, and it
+            // greys itself out when there is no text to paste.
+            PasteButton(payloadType: String.self) { @Sendable strings in
+                // The payload can arrive off the main actor.
+                let pasted = strings.first
+                Task { @MainActor in paste(pasted) }
             }
-            .disabled(!clipboardHasText || isImporting)
-            .opacity(clipboardHasText ? 1 : 0.45)
+            .buttonBorderShape(.capsule)
+            .labelStyle(.titleAndIcon)
+            .controlSize(.large)
+            // iOS refuses a paste control it cannot clearly see, so this one
+            // stays opaque rather than wearing the Import button's glass.
+            .tint(AppColors.categoryNeutralCool)
+            .disabled(isImporting)
 
             GlassButton(
-                title: isImporting ? "Importing" : "Import File",
-                icon: isImporting ? "arrow.triangle.2.circlepath" : "doc.badge.plus",
+                title: "Import file",
+                icon: "doc.badge.plus",
                 style: .secondary,
                 size: .small,
+                isLoading: isImporting,
                 fullWidth: true
             ) {
                 textFieldFocused = false
                 showingFileImporter = true
             }
-            .disabled(isImporting)
         }
     }
 
@@ -231,39 +257,52 @@ struct ReadAloudComposerSheet: View {
                             .foregroundStyle(AppColors.warning)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        Button("Use First Practice Section") {
+                        // A real button: this was caption text, the only way
+                        // out of an over-limit draft, with a hit area the size
+                        // of its words.
+                        GlassButton(
+                            title: "Use first practice section",
+                            icon: "scissors",
+                            style: .secondary,
+                            size: .small
+                        ) {
                             useFirstPracticeSection()
                         }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppColors.toolReadAloud)
                     }
                 }
             }
         }
     }
 
+    /// Reads Stop while the passage plays, like the session's Hear it. It used
+    /// to disable itself instead, and an 800-character passage could only be
+    /// silenced by leaving the sheet.
     private var previewActions: some View {
-        HStack(spacing: 10) {
+        let isSpeaking = pronunciationService.isSpeaking
+
+        return HStack(spacing: 10) {
             GlassButton(
-                title: pronunciationService.isSpeaking ? "Playing" : "Hear It",
-                icon: pronunciationService.isSpeaking
-                    ? "speaker.wave.3.fill"
-                    : "speaker.wave.2.fill",
+                title: isSpeaking ? "Stop" : "Hear it",
+                icon: isSpeaking ? "stop.fill" : "speaker.wave.2.fill",
                 style: .secondary,
                 size: .small,
                 fullWidth: true
             ) {
                 Haptics.light()
-                textFieldFocused = false
-                pronunciationService.speak(word: trimmedText)
+                if isSpeaking {
+                    pronunciationService.stop()
+                } else {
+                    textFieldFocused = false
+                    pronunciationService.speak(word: trimmedText)
+                }
             }
-            .disabled(!canUseText || pronunciationService.isSpeaking)
+            .disabled(!canUseText)
             .opacity(canUseText ? 1 : 0.45)
-            .accessibilityLabel("Hear passage")
+            .accessibilityLabel(isSpeaking ? "Stop playback" : "Hear passage")
 
             if canDefine {
                 GlassButton(
-                    title: "Define",
+                    title: "Full definition",
                     icon: "book.fill",
                     style: .secondary,
                     size: .small,
@@ -273,7 +312,6 @@ struct ReadAloudComposerSheet: View {
                     pronunciationService.stop()
                     showingDictionary = true
                 }
-                .accessibilityLabel("View dictionary definition")
             }
         }
     }
@@ -281,7 +319,7 @@ struct ReadAloudComposerSheet: View {
     private var saveActions: some View {
         VStack(spacing: 10) {
             GlassButton(
-                title: "Save and Practice",
+                title: "Save and practice",
                 icon: "mic.fill",
                 style: .primary,
                 fullWidth: true
@@ -294,7 +332,7 @@ struct ReadAloudComposerSheet: View {
             .opacity(canUseText ? 1 : 0.45)
 
             GlassButton(
-                title: isEditing ? "Save Changes" : "Save for Later",
+                title: isEditing ? "Save changes" : "Save for later",
                 icon: "bookmark.fill",
                 style: .secondary,
                 fullWidth: true
@@ -310,12 +348,14 @@ struct ReadAloudComposerSheet: View {
 
     // MARK: - Sources
 
-    private func pasteFromClipboard() {
-        guard let pastedText = UIPasteboard.general.string,
-              !pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            clipboardHasText = false
-            return
-        }
+    private func close() {
+        pronunciationService.stop()
+        onCancel()
+    }
+
+    private func paste(_ pastedText: String?) {
+        guard let pastedText,
+              !pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         Haptics.light()
         requestReplacement(

@@ -52,6 +52,39 @@ struct GlassCard<Content: View>: View {
     }
 }
 
+// MARK: - Glass Row Group
+
+/// Rows that belong together on one plate, split by inset hairlines - the
+/// grouped-list shape of iOS Settings. Settings used to float every row on a
+/// card of its own, fourteen plates in three sections, while History already
+/// grouped a week's takes on one; this is that second shape, named.
+///
+/// Rows pad themselves. The group draws the plate, the rules, and the clip
+/// that keeps a pressed row's highlight (`RowPressStyle`) inside the corners.
+struct GlassRowGroup<Content: View>: View {
+    /// Where each hairline starts, so rules line up with row text rather than
+    /// running under a leading glyph.
+    var dividerInset: CGFloat = 0
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GlassCard(padding: 0) {
+            VStack(spacing: 0) {
+                Group(subviews: content) { rows in
+                    ForEach(rows) { row in
+                        if row.id != rows.first?.id {
+                            MetricRowDivider()
+                                .padding(.leading, dividerInset)
+                        }
+                        row
+                    }
+                }
+            }
+            .clipShape(.rect(cornerRadius: 20))
+        }
+    }
+}
+
 // MARK: - Featured Glass Card (for hero/prominent content)
 
 struct FeaturedGlassCard<Content: View>: View {

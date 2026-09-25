@@ -25,18 +25,27 @@ class CurriculumViewModel {
         service.isLessonCompleted(lessonId)
     }
 
+    /// Also moves the current lesson on when this finishes it - see
+    /// `CurriculumService.recordActivityCompletion`.
     @MainActor
     func completeActivity(_ activityId: String, context: ModelContext) {
         service.completeActivity(activityId, context: context)
     }
 
-    @MainActor
-    func advanceToNextLesson(context: ModelContext) {
-        service.advanceToNextLesson(context: context)
+    /// The first step not done yet, in teaching order.
+    func firstOpenStepIndex(for lesson: CurriculumLesson) -> Int? {
+        lesson.activities.firstIndex { !isActivityCompleted($0.id) }
     }
 
+    /// Where a lesson opens: its first open step - or, once the lesson is
+    /// finished, its speaking step. Reopening a finished lesson ("Prove it
+    /// again", "Practice again") is to speak it again, not to reread it; the
+    /// reading stays one tap away in the title menu.
     func initialStepIndex(for lesson: CurriculumLesson) -> Int {
-        lesson.activities.firstIndex(where: { !isActivityCompleted($0.id) }) ?? 0
+        if isLessonCompleted(lesson.id) {
+            return lesson.activities.firstIndex { $0.type == .practice } ?? 0
+        }
+        return firstOpenStepIndex(for: lesson) ?? 0
     }
 
     func isLessonAccessible(_ lesson: CurriculumLesson, in phase: CurriculumPhase) -> Bool {

@@ -122,10 +122,7 @@ struct TimerDial: View {
     private var captionText: some View {
         if let caption {
             Text(caption)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.5))
-                .textCase(.uppercase)
-                .tracking(1.0)
+                .eyebrowStyle(.white.opacity(0.5))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }

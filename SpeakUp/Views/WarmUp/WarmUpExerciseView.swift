@@ -296,7 +296,9 @@ struct WarmUpExerciseView: View {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // A painted circle has no glass to react to the touch, so the press
+        // style is the only sign the tap landed.
+        .buttonStyle(GlassPressStyle())
         .accessibilityLabel(label)
     }
 
@@ -412,12 +414,7 @@ struct WarmUpExerciseView: View {
     private func cueText(headline: String, detail: String?, next: String?) -> some View {
         VStack(spacing: 8) {
             if !viewModel.isRunning, !viewModel.isLeadingIn {
-                Text("Paused - tap the circle to resume")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(tint.opacity(0.16)))
+                StatusPill(text: "Paused - tap the circle to resume", color: tint)
             }
 
             Text(headline)

@@ -31,7 +31,10 @@ struct StatusPill: View {
         }
         .foregroundStyle(color)
         .padding(.horizontal, 10)
-        .frame(height: 28)
+        .padding(.vertical, 4)
+        // 28pt at the default size, taller when Dynamic Type wraps the text;
+        // a fixed height clipped it.
+        .frame(minHeight: 28)
         .background(Capsule().fill(color.opacity(fillOpacity)))
     }
 }

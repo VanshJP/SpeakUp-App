@@ -36,6 +36,10 @@ root-level celebration.
 
 Progress updates from recording pipeline / history signals. Mechanics: `GoalProgressService.refreshGoals` snapshots each goal's window on the main actor, scans all recordings on a background `ModelContext` (`Task.detached`; one analysis decode feeds every goal whose window contains the session), then applies `GoalProgressOutcome` diffs back on the main context and saves only real changes. Called from Today's load and `GoalsView`. Keep templates and progress math in the service, not duplicated in views.
 
+**Goals sheet.** Sections: Active goals, **Ended** (past the deadline and not met - `isExpired` is computed, so `GoalsViewModel` splits the fetched open goals in Swift; these used to sit atop Active forever in red), Add a goal, Completed. One active goal per type: a template whose type is already active reads **Added** and is disabled (repeat taps used to stack duplicates), and `createGoal` guards it too. Every goal has a visible ••• menu (Delete; **Try again** on an ended goal, which replaces it with a fresh goal from its template) beside the old long-press menu. Ended and completed goals are rows in one `GlassRowGroup` each; glyphs are `IconChip`s; template cards press with `GlassPressStyle`. Goal progress is a `TickMeter` in the primary tint (success once met), never the score ramp - a goal on its first day read red, as if failing. Template titles are sentence case; they are copied into `UserGoal.title` at creation, so saved goals keep their old titles.
+
+**Gallery chrome.** `AchievementGalleryView` has an inline title like every other page (it was the app's one `.large`), `GlassSectionHeader`s for Unlocked / Locked, and cards whose content is pinned to the top with the description reserving two lines, so badges and status lines sit level across a row. Opened as a sheet from Learn, the sheet adds `Button(role: .close)`; pushed from Streak it has Back.
+
 ## Cross-links
 
 [today-library.md](./today-library.md) · [recording-detail.md](./recording-detail.md) · [analytics-review.md](./analytics-review.md) · [architecture.md](./architecture.md)

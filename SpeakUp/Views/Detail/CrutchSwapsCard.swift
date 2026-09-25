@@ -134,9 +134,10 @@ struct CrutchSwapsCard: View {
 
                 secondLine(hit, fix: fix)
             }
+            .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowPressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerAccessibility(hit, fix: fix))
         .accessibilityHint(isExpanded(hit) ? "Collapse this habit" : "Expand for examples and fixes")
@@ -269,25 +270,32 @@ struct CrutchSwapsCard: View {
         let line = moment.practiceLine
 
         if !playable.isEmpty || line != nil {
-            HStack(spacing: 6) {
+            HStack(alignment: .top, spacing: 6) {
+                // Wraps: six play points plus both labels ran past a 375pt
+                // screen in one row.
                 if !playable.isEmpty {
-                    Text("Hear it")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    FlowLayout(spacing: 6) {
+                        Text("Hear it")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(minHeight: AppLayout.minHitTarget)
 
-                    ForEach(Array(playable.enumerated()), id: \.element.id) { index, occurrence in
-                        Button {
-                            onPlay(occurrence.timestamp)
-                        } label: {
-                            Image(systemName: "waveform")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(hit.category.badgeColor)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Capsule().fill(hit.category.badgeColor.opacity(0.15)))
+                        ForEach(Array(playable.enumerated()), id: \.element.id) { index, occurrence in
+                            Button {
+                                onPlay(occurrence.timestamp)
+                            } label: {
+                                Image(systemName: "waveform")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(hit.category.badgeColor)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(hit.category.badgeColor.opacity(0.15)))
+                                    .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(GlassPressStyle())
+                            .accessibilityLabel("Play \(hit.word), occurrence \(index + 1) of \(playable.count)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Play \(hit.word), occurrence \(index + 1) of \(playable.count)")
                     }
                 }
 
@@ -320,8 +328,10 @@ struct CrutchSwapsCard: View {
             .overlay {
                 Capsule().strokeBorder(AppColors.primary.opacity(0.45), lineWidth: 1)
             }
+            .frame(minHeight: AppLayout.minHitTarget)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .accessibilityLabel("Practice saying the corrected line out loud")
     }
 

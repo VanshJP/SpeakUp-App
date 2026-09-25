@@ -507,7 +507,7 @@ struct TodayView: View {
     /// `ContentView`, which owns the tool sheets.
     private func startRoutineStep(_ step: RoutineStep) {
         if step == .session {
-            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+            startTodaysTake()
         } else {
             routine.start(step)
         }
@@ -517,7 +517,7 @@ struct TodayView: View {
     private func startPendingRoutineStepIfNeeded() {
         guard routine.pendingStep == .session, isActiveTab else { return }
         routine.clearPendingStep()
-        onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+        startTodaysTake()
     }
 
     /// The card owns the whole brief now - topic, length, words, and Start - 
@@ -525,7 +525,7 @@ struct TodayView: View {
     /// `promptSectionTitle` because a story day is not a prompt day.
     private var sessionModule: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader(promptSectionTitle, icon: "mic.fill")
+            GlassSectionHeader(promptSectionTitle)
 
             interactivePromptSection
         }
@@ -553,13 +553,15 @@ struct TodayView: View {
 
     // MARK: - Focus Section
 
-    private static let focusMinimumSessions = 2
+    /// One scored take is not a pattern. The recorder's focus line uses the
+    /// same bar, so a take never names a focus Today has not shown.
+    static let focusMinimumSessions = 2
 
     @ViewBuilder
     private var focusSection: some View {
         if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Today's focus", icon: TodayHomeModule.focus.icon) {
+                GlassSectionHeader("Today's focus") {
                     HStack(spacing: 6) {
                         Text("Last \(plan.sessionCount)")
                             .font(.caption.weight(.semibold))
@@ -572,9 +574,7 @@ struct TodayView: View {
                 CoachFocusCard(
                     plan: plan,
                     onPractice: self.handleFocusRoute,
-                    onPracticeAgain: {
-                        onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
-                    },
+                    onPracticeAgain: { startTodaysTake() },
                     showsHeader: false
                 )
             }
@@ -643,7 +643,7 @@ struct TodayView: View {
         case .openConfidence:
             onShowConfidence()
         case .practiceAgain:
-            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+            startTodaysTake()
         case .close:
             break
         }
@@ -682,31 +682,21 @@ struct TodayView: View {
     // MARK: - Top Header
 
     private var topHeaderRow: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .textCase(.uppercase)
-                    .tracking(0.8)
-                Text(headline)
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-
-                if let line = arrivalLine {
-                    Text(line)
-                        .font(.caption)
-                        .foregroundStyle(
-                            viewModel.practicedToday
-                                ? AnyShapeStyle(AppColors.success)
-                                : AnyShapeStyle(.secondary)
-                        )
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
+        PageTitle(
+            kicker: Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+            title: headline
+        ) {
+            if let line = arrivalLine {
+                Text(line)
+                    .font(.caption)
+                    .foregroundStyle(
+                        viewModel.practicedToday
+                            ? AnyShapeStyle(AppColors.success)
+                            : AnyShapeStyle(.secondary)
+                    )
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
-
-            Spacer()
-
+        } accessory: {
             NavigationLink {
                 StreakDetailView()
             } label: {
@@ -717,7 +707,6 @@ struct TodayView: View {
             .buttonStyle(GlassPressStyle())
             .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
         }
-        .padding(.top, 4)
     }
 
     /// What the streak is actually worth right now. Never claims a day the
@@ -730,18 +719,20 @@ struct TodayView: View {
             : "Day \(streak) · ready when you are"
     }
 
+    /// A small capsule, not a full-width slab: it is the rarest action on the
+    /// page and was the widest control on it, as wide as Start speaking.
     private var editHomepageButton: some View {
         GlassButton(
             title: "Edit homepage",
             icon: "slider.horizontal.3",
             style: .secondary,
-            size: .medium,
-            fullWidth: true
+            size: .small
         ) {
             Haptics.light()
             withAnimation(AppMotion.settle) { isEditingLayout = true }
         }
         .accessibilityLabel("Customize Today")
+        .frame(maxWidth: .infinity)
         .padding(.top, 4)
     }
 
@@ -848,17 +839,26 @@ struct TodayView: View {
             freeHint: "Records a \(viewModel.selectedDuration.displayName) take with no topic",
             onStart: {
                 sessionZoomSource?.wrappedValue = SessionStartFooter.startZoomID
-                if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
-                    onStartStoryPractice?(story, viewModel.selectedDuration)
-                } else {
-                    onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
-                }
+                startTodaysTake()
             },
             onFreeTalk: {
                 onStartRecording(nil, viewModel.selectedDuration)
             },
             zoomNamespace: zoomNamespace
         )
+    }
+
+    /// Today's take, on whichever brief the card is showing. Every start on
+    /// this page that means "the take" - the hero, the routine card and its
+    /// handoff, the focus card's Practice again, a coach note - comes through
+    /// here. They used to call `onStartRecording(todaysPrompt)` directly, so
+    /// on a story day they recorded a prompt the page was not showing.
+    private func startTodaysTake() {
+        if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
+            onStartStoryPractice?(story, viewModel.selectedDuration)
+        } else {
+            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+        }
     }
 
     // MARK: - Interactive Prompt Section
@@ -897,7 +897,7 @@ struct TodayView: View {
 
     private var prepToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Prep tools", icon: "wrench.and.screwdriver.fill")
+            GlassSectionHeader("Prep tools")
 
             if let recommended = recommendedPrepTool {
                 recommendedToolBanner(recommended)

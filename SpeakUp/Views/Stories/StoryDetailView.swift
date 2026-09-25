@@ -44,7 +44,9 @@ struct StoryDetailView: View {
                 liveContent
             }
         }
-        .navigationTitle("")
+        // A fixed title: `story.title` here would be read during the pop
+        // that follows a delete.
+        .navigationTitle("Story")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
@@ -71,18 +73,12 @@ struct StoryDetailView: View {
             }
         }) {
             NavigationStack {
-                StoryEditorView(
-                    viewModel: viewModel,
-                    existingStory: story,
-                    onStartPractice: onStartPractice,
-                    onSendToWarmUp: onSendToWarmUp,
-                    onSendToDrill: onSendToDrill
-                )
+                StoryEditorView(viewModel: viewModel, existingStory: story)
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .alert("Delete Story?", isPresented: $showingDeleteAlert) {
+        .alert(StoryDeleteCopy.title, isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 isDeleted = true
                 Haptics.warning()
@@ -91,8 +87,9 @@ struct StoryDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This story will be permanently deleted.")
+            Text(StoryDeleteCopy.message)
         }
+        .storiesErrorAlert(viewModel)
         .onAppear {
             viewModel.surfaceAppeared()
             guard !storyIsGone else { return }
@@ -109,32 +106,26 @@ struct StoryDetailView: View {
                 VStack(spacing: 20) {
                     heroHeader
                     primaryActions
+                    // The script is what you came to rehearse, so it sits under
+                    // the actions and progress follows. Below the metrics and
+                    // chart it started ~600pt down once a story had takes.
+                    contentSection
+                    tagsSection
                     if !recordingSummaries.isEmpty {
                         metricsSection
                         practiceChartSection
                     }
-                    contentSection
-                    tagsSection
                     recordingsSection
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppLayout.pageHorizontal)
                 .padding(.vertical, 16)
             }
             .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
 
             if let toastMessage {
-                Text(toastMessage)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background {
-                        Capsule().fill(AppColors.primary.opacity(0.9))
-                    }
-                    .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+                toast(toastMessage)
                     .padding(.top, 12)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
@@ -153,20 +144,11 @@ struct StoryDetailView: View {
         GlassCard(padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    folderChip
-                    if story.isFavorite {
-                        HStack(spacing: 3) {
-                            Image(systemName: "pin.fill")
-                            Text("Pinned")
-                        }
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(AppColors.warning)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background { Capsule().fill(AppColors.warning.opacity(0.15)) }
+                    StoryFolderChip(folder: currentFolder) {
+                        showingMoveSheet = true
                     }
 
-                    Spacer()
+                    Spacer(minLength: 8)
 
                     Text(story.updatedAt.formatted(date: .abbreviated, time: .omitted))
                         .font(.caption)
@@ -177,6 +159,18 @@ struct StoryDetailView: View {
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Stage used to be write-only: set from a menu, shown nowhere.
+                HStack(spacing: 8) {
+                    StatusPill(
+                        text: currentStage.displayName,
+                        color: stageColor,
+                        glyph: .icon(currentStage.icon)
+                    )
+                    if story.isFavorite {
+                        StatusPill(text: "Pinned", color: AppColors.warning, glyph: .icon("pin.fill"))
+                    }
+                }
 
                 HStack(spacing: 12) {
                     Label("\(display.wordCount) words", systemImage: "text.word.spacing")
@@ -192,36 +186,19 @@ struct StoryDetailView: View {
         }
     }
 
-    private var folderChip: some View {
-        Button {
-            showingMoveSheet = true
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: currentFolder?.systemImage ?? "tray.full")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(currentFolder?.name ?? "All Stories")
-                    .font(.caption2.weight(.semibold))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-            }
-            .foregroundStyle(folderColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background { Capsule().fill(folderColor.opacity(0.15)) }
-        }
-        .buttonStyle(.plain)
-    }
-
     private var currentFolder: StoryFolder? {
         guard let id = story.folderId else { return nil }
         return viewModel.folders.first { $0.id == id }
     }
 
-    private var folderColor: Color {
-        if let folder = currentFolder {
-            return Color(hex: folder.colorHex)
+    private var currentStage: StoryStage { story.resolvedStage }
+
+    private var stageColor: Color {
+        switch currentStage {
+        case .spark: return AppColors.accent
+        case .draft: return AppColors.info
+        case .polished: return AppColors.success
         }
-        return AppColors.primary
     }
 
     // MARK: - Primary Actions grid
@@ -229,7 +206,7 @@ struct StoryDetailView: View {
     private var primaryActions: some View {
         VStack(spacing: 10) {
             GlassButton(
-                title: "Practice This Story",
+                title: "Practice this story",
                 icon: "mic.fill",
                 style: .primary,
                 size: .large,
@@ -237,12 +214,12 @@ struct StoryDetailView: View {
             ) {
                 guard let onStartPractice else { return }
                 Haptics.heavy()
-                onStartPractice(story, .sixty)
+                onStartPractice(story, story.practiceDuration)
             }
 
             HStack(spacing: 10) {
                 GlassButton(
-                    title: "Warm-Up",
+                    title: "Warm up",
                     icon: "flame.fill",
                     style: .secondary,
                     fullWidth: true
@@ -276,7 +253,7 @@ struct StoryDetailView: View {
     private var practiceChartSection: some View {
         if !chartPoints.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Practice progress", icon: "chart.line.uptrend.xyaxis")
+                GlassSectionHeader("Practice progress")
                 PracticeHistoryChart(
                     dataPoints: chartPoints,
                     accentColor: AppColors.primary
@@ -289,19 +266,9 @@ struct StoryDetailView: View {
 
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                GlassSectionHeader("Content", icon: "doc.text")
-                Spacer()
+            GlassSectionHeader("Content") {
                 copyButton
-                Button {
-                    Haptics.light()
-                    showingEditor = true
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(6)
-                }
+                editButton
             }
 
             Button {
@@ -321,8 +288,24 @@ struct StoryDetailView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
+            .accessibilityHint("Opens the editor")
         }
+    }
+
+    private var editButton: some View {
+        Button {
+            Haptics.light()
+            showingEditor = true
+        } label: {
+            Image(systemName: "pencil")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(.rect)
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("Edit story")
     }
 
     private var copyButton: some View {
@@ -342,26 +325,29 @@ struct StoryDetailView: View {
             .font(.caption.weight(.medium))
             .foregroundStyle(showCopied ? AppColors.success : .secondary)
             .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
+            .contentShape(.rect)
             .animation(.easeInOut(duration: 0.2), value: showCopied)
         }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel(showCopied ? "Copied" : "Copy text")
     }
 
     // MARK: - Tags
 
     @ViewBuilder
     private var tagsSection: some View {
-        if !story.tags.isEmpty {
+        // Bind once: each `tags` read decodes the Codable column.
+        let tags = story.tags
+        if !tags.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    GlassSectionHeader("Tags", icon: "tag")
-                    Spacer()
+                GlassSectionHeader("Tags") {
                     tagActionsMenu
                 }
 
                 GlassCard {
                     FlowLayout(spacing: 8) {
-                        ForEach(story.tags) { tag in
+                        ForEach(tags) { tag in
                             StoryTagPill(tag: tag, onTap: {
                                 Haptics.light()
                                 viewModel.applyTagFilter(tag)
@@ -388,11 +374,13 @@ struct StoryDetailView: View {
                 Label("Add Words to Dictation Bank", systemImage: "waveform")
             }
         } label: {
-            Image(systemName: "arrow.up.circle")
-                .font(.caption.weight(.semibold))
+            Image(systemName: "text.badge.plus")
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .padding(6)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(.rect)
         }
+        .accessibilityLabel("Add tag words to your word banks")
     }
 
     private func pushTagsToVocab() {
@@ -420,11 +408,30 @@ struct StoryDetailView: View {
 
     private func showToast(_ message: String) {
         Haptics.success()
+        UIAccessibility.post(notification: .announcement, argument: message)
         withAnimation(.spring(response: 0.3)) { toastMessage = message }
         Task {
             try? await Task.sleep(for: .seconds(1.8))
             withAnimation(.easeOut(duration: 0.25)) { toastMessage = nil }
         }
+    }
+
+    /// The glass capsule `LessonDetailView` confirms with. This was the one
+    /// opaque teal toast in the app.
+    private func toast(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(AppColors.success)
+
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .glassEffect(.regular, in: .capsule)
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
     }
 
     // MARK: - Recordings
@@ -433,17 +440,17 @@ struct StoryDetailView: View {
     private var recordingsSection: some View {
         if !recordingSummaries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    GlassSectionHeader("Practice history", icon: "waveform")
-                    Spacer()
+                GlassSectionHeader("Practice history") {
                     if let avgScore = averageScore {
                         Text("Avg \(avgScore)")
                             .font(.caption.weight(.medium))
+                            .monospacedDigit()
                             .foregroundStyle(AppColors.scoreColor(for: avgScore))
                     }
                 }
 
-                LazyVStack(spacing: 10) {
+                // One plate of rows, like History's weeks - not a card per take.
+                GlassRowGroup(dividerInset: 14) {
                     ForEach(recordingSummaries) { summary in
                         NavigationLink {
                             RecordingDetailView(
@@ -455,43 +462,47 @@ struct StoryDetailView: View {
                                 }
                             )
                         } label: {
-                            GlassCard(padding: 12) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(summary.date.formatted(date: .abbreviated, time: .shortened))
-                                            .font(.subheadline)
-                                            .foregroundStyle(.white)
-                                        HStack(spacing: 8) {
-                                            Text(summary.duration.minutesSeconds)
-                                            if summary.wpm > 0 {
-                                                Text("\(Int(summary.wpm)) wpm")
-                                            }
-                                            if summary.fillerCount > 0 {
-                                                Text("\(summary.fillerCount) fillers")
-                                            }
-                                        }
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    if let score = summary.score {
-                                        Text("\(score)")
-                                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                                            .foregroundStyle(AppColors.scoreColor(for: score))
-                                    }
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            takeRow(summary)
+                                .padding(14)
+                                .contentShape(.rect)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowPressStyle())
                     }
                 }
             }
+        }
+    }
+
+    private func takeRow(_ summary: PracticeRecordingSummary) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(summary.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                HStack(spacing: 8) {
+                    Text(summary.duration.minutesSeconds)
+                    if summary.wpm > 0 {
+                        Text("\(Int(summary.wpm)) wpm")
+                    }
+                    if summary.fillerCount > 0 {
+                        Text("\(summary.fillerCount) fillers")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let score = summary.score {
+                Text("\(score)")
+                    .font(.statValue)
+                    .foregroundStyle(AppColors.scoreColor(for: score))
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -521,18 +532,22 @@ struct StoryDetailView: View {
                 Label("Move to Folder…", systemImage: "folder")
             }
 
-            Menu {
+            // A Picker, so the current stage wears the system checkmark.
+            Picker(selection: Binding(
+                get: { story.resolvedStage },
+                set: { newStage in
+                    viewModel.updateStage(story, stage: newStage)
+                    Haptics.light()
+                }
+            )) {
                 ForEach(StoryStage.allCases) { stage in
-                    Button {
-                        viewModel.updateStage(story, stage: stage)
-                        Haptics.light()
-                    } label: {
-                        Label(stage.displayName, systemImage: stage.icon)
-                    }
+                    Label(stage.displayName, systemImage: stage.icon)
+                        .tag(stage)
                 }
             } label: {
                 Label("Stage", systemImage: "flag")
             }
+            .pickerStyle(.menu)
 
             Divider()
 
@@ -543,9 +558,8 @@ struct StoryDetailView: View {
             }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .font(.body)
-                .frame(width: 28, height: 28)
         }
+        .accessibilityLabel("More")
     }
 }
 

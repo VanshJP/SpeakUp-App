@@ -19,215 +19,39 @@ enum TrendChart {
     static let plotHeight: CGFloat = 210
 }
 
-struct ProgressChartsContent: View {
-    @Environment(\.modelContext) private var modelContext
+// MARK: - Progress Charts Model
 
-    var vocabWords: [VocabCount] = []
+/// What the Progress page loaded, plus the tab and window the user picked.
+/// It lives with whoever shows the page, not inside `ProgressChartsContent`:
+/// History's Recordings / Progress picker tears the section down, and with
+/// this state inside it every flip reset the tab to Score and the window to
+/// 30 days, flashed the loader, and decoded every analysis again.
+@MainActor @Observable
+final class ProgressChartsModel {
+    var selectedTab: ProgressChartsContent.ChartTab = .score
+    var timeRange: ProgressChartsContent.TimeRange = .thirtyDays
 
-    @State private var points: [ChartRecordingPoint] = []
-    @State private var latestSubscores: SpeechSubscores?
-    @State private var scenarioCards: [ScenarioReadiness] = []
-    @State private var isLoading = true
+    private(set) var points: [ChartRecordingPoint] = []
+    private(set) var latestSubscores: SpeechSubscores?
+    private(set) var scenarioCards: [ScenarioReadiness] = []
+    private(set) var lexiconProfile: LexiconProfile?
+    /// False until the first pass lands. Later passes (one per appearance, so
+    /// a new take shows up) refresh in place behind the charts already drawn.
+    private(set) var hasLoaded = false
+    /// The opening window is picked once, when there is first a trend to show.
+    @ObservationIgnored private var rangeSettled = false
+    /// What the last pass was loaded for (see `load(from:key:)`).
+    @ObservationIgnored private var loadedKey: Int?
 
-    @State private var selectedTab: ChartTab = .score
-    @State private var timeRange: TimeRange = .thirtyDays
-    @State private var lexiconProfile: LexiconProfile?
-    @State private var heroRingShown = false
+    /// One background pass: every analyzed take becomes a chart point and a
+    /// lexicon input, so chart bodies never decode an analysis blob.
+    ///
+    /// `key` fingerprints the takes behind the page; a pass for the key
+    /// already loaded is skipped, so returning to the page does not decode
+    /// every analysis again. Nil always loads (pull-to-refresh, Today's push).
+    func load(from container: ModelContainer, key: Int? = nil) async {
+        if hasLoaded, let key, key == loadedKey { return }
 
-    enum ChartTab: String, CaseIterable, Identifiable {
-        case score = "Score"
-        case pace = "Pace"
-        case fillers = "Fillers"
-        case words = "Language"
-        case skills = "Skills"
-        case activity = "Activity"
-
-        var id: String { rawValue }
-
-        var usesTimeRange: Bool { self != .skills && self != .words }
-    }
-
-    enum TimeRange: String, CaseIterable, Identifiable {
-        case sevenDays = "7d"
-        case thirtyDays = "30d"
-        case ninetyDays = "90d"
-        case all = "All"
-
-        var id: String { rawValue }
-
-        var days: Int? {
-            switch self {
-            case .sevenDays: return 7
-            case .thirtyDays: return 30
-            case .ninetyDays: return 90
-            case .all: return nil
-            }
-        }
-
-        var menuLabel: String {
-            switch self {
-            case .sevenDays: return "Last 7 days"
-            case .thirtyDays: return "Last 30 days"
-            case .ninetyDays: return "Last 90 days"
-            case .all: return "All time"
-            }
-        }
-    }
-
-    private var filteredPoints: [ChartRecordingPoint] {
-        guard let days = timeRange.days else { return points }
-        let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
-        return points.filter { $0.date >= cutoff }
-    }
-
-    var body: some View {
-        Group {
-            if isLoading {
-                loadingState
-            } else if points.count < 2 {
-                earlyState
-            } else {
-                VStack(spacing: 20) {
-                    // Conclusion - where am I and which way am I moving.
-                    heroBand
-
-                    trendsSection
-
-                    // Guidance - which situation needs work.
-                    ScenarioReadinessSection(
-                        cards: scenarioCards,
-                        overallScore: lexiconProfile?.interviewReadiness?.score,
-                        analyzedSessions: lexiconProfile?.analyzedSessionCount ?? 0
-                    )
-                }
-            }
-        }
-        .task { await loadPoints() }
-    }
-
-    private var loadingState: some View {
-        VoiceLoader(size: .large)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 56)
-    }
-
-    private var earlyState: some View {
-        EmptyStateCard(
-            icon: "chart.line.uptrend.xyaxis",
-            title: points.isEmpty ? "Your progress starts here" : "One take in",
-            message: points.isEmpty
-                ? "Record your first session. After two takes Big Talk maps where you stand and which way you are moving."
-                : "One more recorded session and your trajectory, readiness map, and trend charts appear here."
-        )
-    }
-
-    private var trendsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Trends", icon: "chart.xyaxis.line") {
-                Text("\(points.count) sessions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    SectionPicker(
-                        sections: ChartTab.allCases,
-                        selection: $selectedTab,
-                        label: { $0.rawValue },
-                        layout: .equalWidth,
-                        framed: false
-                    )
-
-                    timeRangeSlot
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionPicker(
-                        sections: ChartTab.allCases,
-                        selection: $selectedTab,
-                        label: { $0.rawValue },
-                        layout: .scrollable,
-                        framed: false
-                    )
-                    .frame(maxWidth: .infinity)
-                    .layoutPriority(0)
-
-                    timeRangeSlot
-                }
-            }
-
-            if selectedTab == .words {
-                LanguageInsightsView(profile: lexiconProfile, vocabWords: vocabWords)
-            } else if filteredPoints.isEmpty {
-                GlassCard {
-                    EmptyStateInline(
-                        icon: "chart.line.uptrend.xyaxis",
-                        message: points.isEmpty
-                            ? "Complete a few recordings to see your progress trends."
-                            : "No sessions in this window yet. Try widening the time range."
-                    )
-                }
-            } else {
-                switch selectedTab {
-                case .score:
-                    ScoreProgressChart(points: filteredPoints)
-                case .fillers:
-                    FillerTrendChart(points: filteredPoints)
-                case .pace:
-                    PaceTrendChart(points: filteredPoints)
-                case .skills:
-                    SkillBreakdownCard(subscores: latestSubscores, overallScore: points.first?.score ?? 0)
-                case .activity:
-                    SessionFrequencyChart(points: filteredPoints)
-                case .words:
-                    LanguageInsightsView(profile: lexiconProfile, vocabWords: vocabWords)
-                }
-            }
-        }
-    }
-
-    private var timeRangeSlot: some View {
-        timeRangeMenu
-            .fixedSize()
-            .opacity(selectedTab.usesTimeRange ? 1 : 0)
-            .disabled(!selectedTab.usesTimeRange)
-            .accessibilityHidden(!selectedTab.usesTimeRange)
-    }
-
-    private var timeRangeMenu: some View {
-        Menu {
-            ForEach(TimeRange.allCases) { range in
-                Button {
-                    Haptics.light()
-                    timeRange = range
-                } label: {
-                    HStack {
-                        Text(range.menuLabel)
-                        if timeRange == range { Spacer(); Image(systemName: "checkmark") }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(timeRange.rawValue)
-                    .font(.caption.weight(.semibold))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .glassEffect(.regular.interactive(), in: .capsule)
-        }
-        .accessibilityLabel("Time range")
-    }
-
-    // MARK: - Background Load
-
-    private func loadPoints() async {
-        let container = modelContext.container
         let result = await Task.detached(priority: .userInitiated) { () -> ([ChartRecordingPoint], SpeechSubscores?, LexiconProfile, [ScenarioReadiness]) in
             let context = ModelContext(container)
             let descriptor = FetchDescriptor<Recording>(
@@ -274,19 +98,307 @@ struct ProgressChartsContent: View {
             return (pts, latest, profile, scenarios)
         }.value
 
+        // The page went away mid-pass; the next appearance loads again.
+        guard !Task.isCancelled else { return }
+
         points = result.0
         latestSubscores = result.1
         lexiconProfile = result.2
         scenarioCards = result.3
-        isLoading = false
+        hasLoaded = true
+        loadedKey = key
+
+        if !rangeSettled, result.0.count >= 2 {
+            timeRange = .opening(for: result.0)
+            rangeSettled = true
+        }
+    }
+}
+
+// MARK: - Progress Charts Content
+
+struct ProgressChartsContent: View {
+    @Environment(\.modelContext) private var modelContext
+
+    @Bindable var model: ProgressChartsModel
+    var vocabWords: [VocabCount] = []
+    /// The early state's way out. Nil when Today pushed the page: Today is
+    /// one Back away.
+    var onShowToday: (() -> Void)? = nil
+    /// Opens a take from a pinned Score or Pace point. Nil hides that action.
+    var onSelectRecording: ((String) -> Void)? = nil
+    /// Starts practice for a readiness row. Nil keeps the rows read-only.
+    var onPracticeScenario: ((PracticeScenario) -> Void)? = nil
+    /// Fingerprint of the takes behind the page; the charts reload when it
+    /// changes. Nil reloads on every appearance.
+    var reloadKey: Int? = nil
+
+    @State private var heroRingShown = false
+
+    enum ChartTab: String, CaseIterable, Identifiable {
+        case score = "Score"
+        case pace = "Pace"
+        case fillers = "Fillers"
+        case words = "Language"
+        case skills = "Skills"
+        case activity = "Activity"
+
+        var id: String { rawValue }
+
+        var usesTimeRange: Bool { self != .skills && self != .words }
+    }
+
+    enum TimeRange: String, CaseIterable, Identifiable {
+        case sevenDays = "7d"
+        case thirtyDays = "30d"
+        case ninetyDays = "90d"
+        case all = "All"
+
+        var id: String { rawValue }
+
+        var days: Int? {
+            switch self {
+            case .sevenDays: return 7
+            case .thirtyDays: return 30
+            case .ninetyDays: return 90
+            case .all: return nil
+            }
+        }
+
+        var menuLabel: String {
+            switch self {
+            case .sevenDays: return "Last 7 days"
+            case .thirtyDays: return "Last 30 days"
+            case .ninetyDays: return "Last 90 days"
+            case .all: return "All time"
+            }
+        }
+
+        /// Start of the window, or nil for all time.
+        func cutoff(from now: Date = .now) -> Date? {
+            days.map { now.addingTimeInterval(-Double($0) * 86400) }
+        }
+
+        /// The window the page opens on: 30 days, widened until it holds the
+        /// two takes a trend needs, so someone back after a month away does
+        /// not open onto an empty plot.
+        static func opening(for points: [ChartRecordingPoint]) -> TimeRange {
+            let now = Date.now
+            for range in [TimeRange.thirtyDays, .ninetyDays] {
+                guard let cutoff = range.cutoff(from: now) else { continue }
+                if points.filter({ $0.date >= cutoff }).count >= 2 { return range }
+            }
+            return .all
+        }
+    }
+
+    private var filteredPoints: [ChartRecordingPoint] {
+        guard let cutoff = model.timeRange.cutoff() else { return model.points }
+        return model.points.filter { $0.date >= cutoff }
+    }
+
+    var body: some View {
+        Group {
+            if !model.hasLoaded {
+                loadingState
+            } else if model.points.count < 2 {
+                earlyState
+            } else {
+                VStack(spacing: 20) {
+                    // Conclusion - where am I and which way am I moving.
+                    heroBand
+
+                    trendsSection
+
+                    // Guidance - which situation needs work.
+                    ScenarioReadinessSection(
+                        cards: model.scenarioCards,
+                        overallScore: model.lexiconProfile?.interviewReadiness?.score,
+                        analyzedSessions: model.lexiconProfile?.analyzedSessionCount ?? 0,
+                        onPractice: onPracticeScenario
+                    )
+                }
+            }
+        }
+        .task(id: reloadKey) { await model.load(from: modelContext.container, key: reloadKey) }
+    }
+
+    private var loadingState: some View {
+        VoiceLoader(size: .large)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 56)
+    }
+
+    private var earlyState: some View {
+        EmptyStateCard(
+            icon: "chart.line.uptrend.xyaxis",
+            title: model.points.isEmpty ? "Your progress starts here" : "One take in",
+            message: model.points.isEmpty
+                // Counts scored takes only - "record your first session"
+                // was wrong for anyone whose only take had not scored.
+                ? "After two scored takes, Big Talk maps where you stand and which way you are moving."
+                : "One more recorded session and your trajectory, readiness map, and trend charts appear here.",
+            // The same destination and words as the empty Recordings list.
+            buttonTitle: onShowToday == nil ? nil : "Choose today's prompt",
+            buttonAction: onShowToday
+        )
+    }
+
+    private var trendsSection: some View {
+        let windowPoints = filteredPoints
+        let usesRange = model.selectedTab.usesTimeRange
+
+        return VStack(alignment: .leading, spacing: 12) {
+            // The window belongs to the chapter, not the tab row: beside six
+            // tabs it overflowed a phone's width and pushed the row onto a
+            // scrolling rail with Activity off-screen.
+            GlassSectionHeader("Trends") {
+                HStack(spacing: 8) {
+                    Text(windowPoints.count == 1 ? "1 session" : "\(windowPoints.count) sessions")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+
+                    timeRangeMenu
+                }
+                // Held in the layout while hidden so a tab switch never moves the plot.
+                .opacity(usesRange ? 1 : 0)
+                .disabled(!usesRange)
+                .accessibilityHidden(!usesRange)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                chartTabPicker(layout: .equalWidth)
+
+                chartTabPicker(layout: .scrollable)
+                    .frame(maxWidth: .infinity)
+            }
+
+            chart(for: model.selectedTab, windowPoints: windowPoints)
+        }
+    }
+
+    private func chartTabPicker(layout: SectionPicker<ChartTab>.Layout) -> some View {
+        SectionPicker(
+            sections: ChartTab.allCases,
+            selection: $model.selectedTab,
+            label: { $0.rawValue },
+            layout: layout,
+            framed: false
+        )
+    }
+
+    /// Skills and Language ignore the window, so they never pass through its
+    /// empty check: Skills used to say "try widening the time range" while
+    /// the range control was hidden for that very tab.
+    @ViewBuilder
+    private func chart(for tab: ChartTab, windowPoints: [ChartRecordingPoint]) -> some View {
+        switch tab {
+        case .words:
+            LanguageInsightsView(profile: model.lexiconProfile, vocabWords: vocabWords)
+        case .skills:
+            SkillBreakdownCard(subscores: model.latestSubscores, overallScore: model.points.first?.score ?? 0)
+        case .score, .pace, .fillers, .activity:
+            if let message = thinWindowMessage(for: tab, windowPoints: windowPoints) {
+                thinWindowCard(message)
+            } else if tab == .score {
+                ScoreProgressChart(points: windowPoints, onOpenTake: openTake)
+            } else if tab == .pace {
+                PaceTrendChart(points: windowPoints, onOpenTake: openTake)
+            } else if tab == .fillers {
+                FillerTrendChart(points: windowPoints)
+            } else {
+                SessionFrequencyChart(points: windowPoints)
+            }
+        }
+    }
+
+    /// Why the window cannot draw this tab, or nil when it can. Per-take
+    /// plots need two takes; Fillers and Activity compare weeks, so they need
+    /// two weeks. This page only shows with two scored takes overall, so the
+    /// charts' own "two sessions and this starts…" lines were wrong here.
+    private func thinWindowMessage(for tab: ChartTab, windowPoints: [ChartRecordingPoint]) -> String? {
+        let window = model.timeRange.menuLabel.lowercased()
+        if windowPoints.isEmpty { return "No sessions in the \(window)." }
+
+        switch tab {
+        case .fillers, .activity:
+            let weeks = Set(windowPoints.map { Calendar.current.startOfDay(for: $0.date.startOfWeek) })
+            guard weeks.count < 2 else { return nil }
+            return model.timeRange == .all
+                ? "Weekly trends start after a second week of practice."
+                : "Weekly trends need two weeks; the \(window) hold one."
+        default:
+            return windowPoints.count < 2 ? "One session in the \(window). A trend needs two." : nil
+        }
+    }
+
+    private func thinWindowCard(_ message: String) -> some View {
+        GlassCard {
+            VStack(spacing: 12) {
+                EmptyStateInline(icon: "chart.line.uptrend.xyaxis", message: message)
+
+                if model.timeRange != .all {
+                    GlassButton(title: "Show all time", style: .secondary, size: .small) {
+                        Haptics.selection()
+                        model.timeRange = .all
+                    }
+                }
+            }
+        }
+    }
+
+    private var openTake: ((UUID) -> Void)? {
+        guard let onSelectRecording else { return nil }
+        return { onSelectRecording($0.uuidString) }
+    }
+
+    private var timeRangeMenu: some View {
+        Menu {
+            // A Picker gives the menu its own checkmark and the selected trait.
+            Picker("Time range", selection: timeRangeSelection) {
+                ForEach(TimeRange.allCases) { range in
+                    Text(range.menuLabel).tag(range)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(model.timeRange.rawValue)
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            // The hit target grows around the capsule, never under the glass.
+            .frame(minHeight: AppLayout.minHitTarget)
+            .contentShape(.rect)
+        }
+        .accessibilityLabel("Time range")
+        .accessibilityValue(model.timeRange.menuLabel)
+    }
+
+    private var timeRangeSelection: Binding<TimeRange> {
+        Binding(
+            get: { model.timeRange },
+            set: { range in
+                guard range != model.timeRange else { return }
+                Haptics.selection()
+                model.timeRange = range
+            }
+        )
     }
 
     // MARK: - Hero Band
 
     private var heroBand: some View {
-        let trajectory = TrajectorySummary.summarize(points.reversed().map(\.score))
+        let trajectory = TrajectorySummary.summarize(model.points.reversed().map(\.score))
         let weekStart = Date().startOfWeek
-        let thisWeek = points.filter { $0.date >= weekStart }.count
+        let thisWeek = model.points.filter { $0.date >= weekStart }.count
         let latest = trajectory.latestScore ?? 0
 
         return FeaturedGlassCard(padding: 12) {
@@ -319,12 +431,14 @@ struct ProgressChartsContent: View {
                     Spacer(minLength: 0)
                 }
 
+                // Scores wear the score ramp; amber and green mean caution and
+                // success elsewhere on this page, not "best" and "this week".
                 HStack(spacing: 0) {
-                    heroCadence("\(trajectory.bestScore)", label: "Best", color: AppColors.warning)
+                    heroCadence("\(trajectory.bestScore)", label: "Best", color: AppColors.scoreColor(for: trajectory.bestScore))
                     cadenceDivider
-                    heroCadence("\(trajectory.averageScore)", label: "Average", color: AppColors.primary)
+                    heroCadence("\(trajectory.averageScore)", label: "Average", color: AppColors.scoreColor(for: trajectory.averageScore))
                     cadenceDivider
-                    heroCadence("\(thisWeek)", label: "This week", color: AppColors.success)
+                    heroCadence("\(thisWeek)", label: "This week", color: .white)
                 }
             }
             .accessibilityElement(children: .ignore)
@@ -384,19 +498,110 @@ struct ProgressChartsContent: View {
 
 // MARK: - Progress Charts View (standalone / navigation destination)
 
+/// The page Today's rings push. It ends on the same Review tools as History's
+/// Progress section; with no root callbacks here, it presents them itself.
 struct ProgressChartsView: View {
-    var body: some View {
-        ZStack {
-            AppBackground(style: .subtle)
+    @State private var model = ProgressChartsModel()
+    @State private var showingListenBack = false
+    @State private var showingGoals = false
+    @State private var showingJournal = false
 
-            PageScrollView {
-                ProgressChartsContent()
-                    .pageContentInsets()
+    var body: some View {
+        PageScrollView {
+            VStack(spacing: AppLayout.chapterSpacing) {
+                ProgressChartsContent(model: model)
+
+                if model.hasLoaded {
+                    ProgressReviewSection(
+                        scoredTakes: model.points.count,
+                        onListenBack: { showingListenBack = true },
+                        onGoals: { showingGoals = true },
+                        onJournal: { showingJournal = true }
+                    )
+                }
             }
-            .scrollIndicators(.hidden)
+            .pageContentInsets()
         }
-        .navigationTitle("Progress Charts")
+        .scrollIndicators(.hidden)
+        .appBackground(.subtle)
+        .navigationTitle("Progress")
         .navigationBarTitleDisplayMode(.inline)
+        .restoresNavigationBar()
+        .sheet(isPresented: $showingListenBack) {
+            BeforeAfterReplayView()
+        }
+        .sheet(isPresented: $showingGoals) {
+            GoalsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingJournal) {
+            NavigationStack {
+                JournalExportView()
+            }
+        }
+    }
+}
+
+// MARK: - Review Section
+
+/// Compare, Listen back, Goals and Journal under the Progress page - shared by
+/// History's Progress section and the page Today's rings push, so both entry
+/// points end on the same tools.
+struct ProgressReviewSection: View {
+    /// Compare and Listen back need two scored takes. Counting every take let
+    /// a processing or failed one open them onto a zero score or an empty sheet.
+    let scoredTakes: Int
+    let onListenBack: () -> Void
+    let onGoals: () -> Void
+    let onJournal: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("Review")
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
+                ForEach(ReviewToolKind.allCases) { tool in
+                    tile(tool)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tile(_ tool: ReviewToolKind) -> some View {
+        switch tool {
+        case .compare:
+            if scoredTakes >= 2 {
+                NavigationLink { ComparisonView().restoresNavigationBar() } label: {
+                    ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
+                }
+                .buttonStyle(GlassPressStyle())
+                .accessibilityHint(tool.bestFor)
+            }
+        case .listenBack:
+            if scoredTakes >= 2 {
+                tileButton(tool, action: onListenBack)
+            }
+        case .goals:
+            tileButton(tool, action: onGoals)
+        case .journal:
+            tileButton(tool, action: onJournal)
+        }
+    }
+
+    private func tileButton(_ tool: ReviewToolKind, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityHint(tool.bestFor)
     }
 }
 
@@ -447,15 +652,22 @@ struct ScoreProgressChart: View {
     }
 
     private let model: PlotModel
+    private let onOpenTake: ((UUID) -> Void)?
 
-    init(points: [ChartRecordingPoint]) {
+    init(points: [ChartRecordingPoint], onOpenTake: ((UUID) -> Void)? = nil) {
         _selectedIndex = State(initialValue: nil)
         model = PlotModel(points: points)
+        self.onOpenTake = onOpenTake
     }
 
     private var selectedPointID: UUID? {
         guard let selectedIndex, selectedIndex < model.points.count else { return nil }
         return model.points[selectedIndex].id
+    }
+
+    private func openAction(for id: UUID) -> (() -> Void)? {
+        guard let onOpenTake else { return nil }
+        return { onOpenTake(id) }
     }
 
     var body: some View {
@@ -568,42 +780,48 @@ struct ScoreProgressChart: View {
 
                     if let idx = selectedIndex, idx < model.points.count {
                         let point = model.points[idx]
-                        HStack(spacing: 16) {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(AppColors.scoreColor(for: point.score))
-                                    .frame(width: 8, height: 8)
-                                Text("\(point.score)")
-                                    .font(.headline.weight(.bold))
-                                    .foregroundStyle(AppColors.scoreColor(for: point.score))
-                            }
-
-                            Text(point.date.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-
-                            if idx > 0 {
-                                let delta = point.score - model.points[idx - 1].score
-                                HStack(spacing: 3) {
-                                    Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                        .font(.caption2.weight(.bold))
-                                    Text("\(delta >= 0 ? "+" : "")\(delta)")
-                                        .font(.caption.weight(.bold))
+                        ScrubReadout(onOpen: openAction(for: point.id)) {
+                            HStack(spacing: 12) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(AppColors.scoreColor(for: point.score))
+                                        .frame(width: 8, height: 8)
+                                    Text("\(point.score)")
+                                        .font(.headline.weight(.bold))
+                                        .monospacedDigit()
+                                        .foregroundStyle(AppColors.scoreColor(for: point.score))
                                 }
-                                .foregroundStyle(delta >= 0 ? AppColors.success : AppColors.error)
+
+                                Text(point.date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+
+                                Spacer(minLength: 4)
+
+                                if idx > 0 {
+                                    let delta = point.score - model.points[idx - 1].score
+                                    HStack(spacing: 3) {
+                                        Image(systemName: delta > 0 ? "arrow.up.right" : delta < 0 ? "arrow.down.right" : "arrow.right")
+                                            .font(.caption2.weight(.bold))
+                                        Text(delta > 0 ? "+\(delta)" : "\(delta)")
+                                            .font(.caption.weight(.bold))
+                                            .monospacedDigit()
+                                    }
+                                    // A drop is amber, never red - the page's one
+                                    // colour for slipping.
+                                    .foregroundStyle(delta > 0 ? AppColors.success : delta < 0 ? AppColors.warning : .secondary)
+                                }
                             }
                         }
-                        .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else if !model.points.isEmpty {
                         HStack(spacing: 16) {
                             StatPair(value: "\(model.points.last?.score ?? 0)", label: "Latest", valueColor: AppColors.scoreColor(for: model.points.last?.score ?? 0), alignment: .leading)
                             Spacer(minLength: 0)
-                            StatPair(value: "\(model.averageScore)", label: "Average", valueColor: AppColors.primary)
+                            StatPair(value: "\(model.averageScore)", label: "Average", valueColor: AppColors.scoreColor(for: model.averageScore))
                             Spacer(minLength: 0)
-                            StatPair(value: "\(model.bestScore)", label: "Best", valueColor: AppColors.warning, alignment: .trailing)
+                            StatPair(value: "\(model.bestScore)", label: "Best", valueColor: AppColors.scoreColor(for: model.bestScore), alignment: .trailing)
                         }
                         .frame(width: plotWidth > 0 ? plotWidth : nil, alignment: .leading)
                     }
@@ -617,6 +835,41 @@ struct ScoreProgressChart: View {
         }
     }
 
+}
+
+// MARK: - Scrub Readout
+
+/// A pinned point's readout under a per-take plot. Given `onOpen` it is the
+/// way into that take - a row that presses and ends in a chevron - which is
+/// what History's charts owe: a point you can see but not open was a dead end.
+private struct ScrubReadout<Content: View>: View {
+    var onOpen: (() -> Void)?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if let onOpen {
+            Button {
+                Haptics.light()
+                onOpen()
+            } label: {
+                HStack(spacing: 8) {
+                    content
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 4)
+                .frame(minHeight: AppLayout.minHitTarget)
+                .contentShape(.rect)
+            }
+            .buttonStyle(RowPressStyle())
+            .accessibilityHint("Opens this take")
+        } else {
+            content
+                .padding(.horizontal, 4)
+        }
+    }
 }
 
 // MARK: - Weekly Bucket
@@ -722,6 +975,7 @@ struct FillerTrendChart: View {
                             HStack(spacing: 4) {
                                 Text(String(format: "%.1f", week.avgFillers))
                                     .font(.subheadline.weight(.bold))
+                                    .monospacedDigit()
                                     .foregroundStyle(week.avgFillers > 10 ? AppColors.error : week.avgFillers > 5 ? AppColors.warning : AppColors.success)
                                 Text("avg fillers")
                                     .font(.caption)
@@ -730,8 +984,9 @@ struct FillerTrendChart: View {
 
                             Spacer()
 
-                            Text("\(week.sessionCount) sessions")
+                            Text(week.sessionCount == 1 ? "1 session" : "\(week.sessionCount) sessions")
                                 .font(.caption)
+                                .monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 4)
@@ -795,11 +1050,18 @@ struct PaceTrendChart: View {
     }
 
     private let model: PlotModel
+    private let onOpenTake: ((UUID) -> Void)?
 
-    init(points: [ChartRecordingPoint]) {
+    init(points: [ChartRecordingPoint], onOpenTake: ((UUID) -> Void)? = nil) {
         _userSettings = Query()
         _selectedIndex = State(initialValue: nil)
         model = PlotModel(points: points)
+        self.onOpenTake = onOpenTake
+    }
+
+    private func openAction(for id: UUID) -> (() -> Void)? {
+        guard let onOpenTake else { return nil }
+        return { onOpenTake(id) }
     }
 
     private var targetWPM: Double {
@@ -843,7 +1105,7 @@ struct PaceTrendChart: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                             .annotation(position: .trailing, alignment: .leading) {
                                 Text("Target")
-                                    .font(.system(size: 8))
+                                    .font(.caption2)
                                     .foregroundStyle(AppColors.primary.opacity(0.6))
                             }
 
@@ -900,27 +1162,29 @@ struct PaceTrendChart: View {
                     if let idx = selectedIndex, idx < model.points.count {
                         let point = model.points[idx]
                         let inRange = optimalRange.contains(point.wpm)
-                        HStack(spacing: 12) {
-                            Text(point.date.formatted(.dateTime.month(.abbreviated).day()))
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-
-                            HStack(spacing: 4) {
-                                Text("\(Int(point.wpm))")
-                                    .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(inRange ? AppColors.success : AppColors.warning)
-                                Text("WPM")
-                                    .font(.caption)
+                        ScrubReadout(onOpen: openAction(for: point.id)) {
+                            HStack(spacing: 12) {
+                                Text(point.date.formatted(.dateTime.month(.abbreviated).day()))
+                                    .font(.caption.weight(.medium))
                                     .foregroundStyle(.secondary)
+
+                                HStack(spacing: 4) {
+                                    Text("\(Int(point.wpm))")
+                                        .font(.subheadline.weight(.bold))
+                                        .monospacedDigit()
+                                        .foregroundStyle(inRange ? AppColors.success : AppColors.warning)
+                                    Text("WPM")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer(minLength: 4)
+
+                                Text(inRange ? "In range" : (point.wpm > targetWPM ? "Too fast" : "Too slow"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(inRange ? AppColors.success : AppColors.warning)
                             }
-
-                            Spacer()
-
-                            Text(inRange ? "In range" : (point.wpm > targetWPM ? "Too fast" : "Too slow"))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(inRange ? AppColors.success : AppColors.warning)
                         }
-                        .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else {
                         HStack(spacing: 16) {
@@ -940,9 +1204,10 @@ struct PaceTrendChart: View {
                         }
                     }
                 } else {
+                    // Reached only when takes in the window carry no measured pace.
                     EmptyStateInline(
                         icon: "speedometer",
-                        message: "Two sessions and this starts tracking your pace."
+                        message: "Pace needs two takes with measured speech in this window."
                     )
                 }
             }
@@ -1000,7 +1265,11 @@ struct SessionFrequencyChart: View {
     @State private var selectedIndex: Int?
 
     /// Built once per `points` change; see `FillerTrendChart.weeklyData`.
+    /// Every week from the first practiced one to this one, empty weeks
+    /// included: a week without a session is a miss, not a gap. Counting only
+    /// practiced weeks let two good weeks out of ten read as a 100% hit rate.
     private let weeklyCounts: [WeeklyFrequencyBucket]
+    private let currentWeek: Date
 
     init(points: [ChartRecordingPoint]) {
         _userSettings = Query()
@@ -1010,11 +1279,19 @@ struct SessionFrequencyChart: View {
         let grouped = Dictionary(grouping: points) { p in
             calendar.startOfDay(for: p.date.startOfWeek)
         }
+        let thisWeek = calendar.startOfDay(for: Date.now.startOfWeek)
+        currentWeek = thisWeek
 
-        weeklyCounts = grouped.map { (weekStart, recs) in
-            WeeklyFrequencyBucket(id: weekStart, sessionCount: recs.count)
+        var buckets: [WeeklyFrequencyBucket] = []
+        if let firstWeek = grouped.keys.min() {
+            var week = firstWeek
+            while week <= thisWeek {
+                buckets.append(WeeklyFrequencyBucket(id: week, sessionCount: grouped[week]?.count ?? 0))
+                guard let next = calendar.date(byAdding: .weekOfYear, value: 1, to: week) else { break }
+                week = calendar.startOfDay(for: next)
+            }
         }
-        .sorted { $0.id < $1.id }
+        weeklyCounts = buckets
     }
 
     private var weeklyGoal: Int {
@@ -1022,11 +1299,13 @@ struct SessionFrequencyChart: View {
     }
 
     // Depends on the goal setting, so it stays computed; it walks the
-    // already-built buckets, not the points.
+    // already-built buckets, not the points. This week is still open: it
+    // counts once it meets the goal, never as a miss before it is over.
     private var goalHitRate: Int {
-        guard !weeklyCounts.isEmpty else { return 0 }
-        let hit = weeklyCounts.filter { $0.sessionCount >= weeklyGoal }.count
-        return Int(Double(hit) / Double(weeklyCounts.count) * 100)
+        let judged = weeklyCounts.filter { $0.id < currentWeek || $0.sessionCount >= weeklyGoal }
+        guard !judged.isEmpty else { return 0 }
+        let hit = judged.filter { $0.sessionCount >= weeklyGoal }.count
+        return Int(Double(hit) / Double(judged.count) * 100)
     }
 
     private var selectedWeekID: Date? {
@@ -1052,7 +1331,7 @@ struct SessionFrequencyChart: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                             .annotation(position: .trailing, alignment: .leading) {
                                 Text("Goal")
-                                    .font(.system(size: 8))
+                                    .font(.caption2)
                                     .foregroundStyle(AppColors.primary.opacity(0.6))
                             }
 
@@ -1101,9 +1380,11 @@ struct SessionFrequencyChart: View {
                             HStack(spacing: 4) {
                                 Text("\(week.sessionCount)")
                                     .font(.subheadline.weight(.bold))
+                                    .monospacedDigit()
                                     .foregroundStyle(week.sessionCount >= weeklyGoal ? AppColors.primary : .primary)
                                 Text("/ \(weeklyGoal)")
                                     .font(.caption)
+                                    .monospacedDigit()
                                     .foregroundStyle(.secondary)
                             }
 

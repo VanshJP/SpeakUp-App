@@ -64,7 +64,9 @@ struct ToolPage<Content: View>: View {
 
     private var hostedBody: some View {
         ZStack {
-            AppBackground()
+            // Subtle: a sheet or a push off Library, never a root tab, so it
+            // sits a hair off the page it came from (ui-design-system rule 1).
+            AppBackground(style: .subtle)
 
             ScrollViewReader { proxy in
                 PageScrollView {
@@ -89,13 +91,7 @@ struct ToolPage<Content: View>: View {
         .toolbar {
             if presentation == .sheet {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.white)
-                    }
-                    .accessibilityLabel("Close")
+                    Button(role: .close) { dismiss() }
                 }
             }
 
@@ -134,7 +130,8 @@ struct ToolPage<Content: View>: View {
 
 // MARK: - Focus Section
 
-/// One outcome heading - title, icon, count, promise - over its items.
+/// One outcome heading - title, count, promise - over its items, which sit
+/// on one `GlassRowGroup` rather than a card each.
 ///
 /// Generic over the item so each page supplies only its own row. The four
 /// copies this replaces each wrapped themselves in `AnyView` to satisfy an
@@ -156,7 +153,7 @@ struct FocusSection<Item: Identifiable, Row: View>: View {
     var body: some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(focus.title, icon: focus.icon) {
+                GlassSectionHeader(focus.title) {
                     Text("\(items.count)")
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -167,7 +164,9 @@ struct FocusSection<Item: Identifiable, Row: View>: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                LazyVStack(spacing: 12) {
+                // One plate per group, rows split by hairlines. Every row
+                // here is a `PracticeItemRow`, so the rules start at its text.
+                GlassRowGroup(dividerInset: PracticeItemRow.dividerInset) {
                     ForEach(items) { item in
                         row(item)
                     }
@@ -188,7 +187,6 @@ struct SourceStoryBanner: View {
     let eyebrow: String
     let title: String
     var tint: Color = AppColors.primary
-    var trailingTag: String?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -206,15 +204,6 @@ struct SourceStoryBanner: View {
             }
 
             Spacer(minLength: 0)
-
-            if let trailingTag {
-                Text(trailingTag)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background { Capsule().fill(tint.opacity(0.18)) }
-            }
         }
         .padding(14)
         .glassEffect(.regular.tint(tint.opacity(0.10)), in: .rect(cornerRadius: 14))

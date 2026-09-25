@@ -12,7 +12,7 @@ enum WarmUpCategory: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .breathing: return "Breathing"
-        case .tonguetwister: return "Tongue Twisters"
+        case .tonguetwister: return "Tongue twisters"
         case .vocal: return "Vocal"
         case .articulation: return "Articulation"
         }

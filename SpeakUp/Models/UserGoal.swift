@@ -107,38 +107,40 @@ struct GoalTemplate {
     let target: Int
     let durationDays: Int
     
+    /// Titles are copied into `UserGoal.title` when a goal is created, so a
+    /// copy change here reaches new goals only; saved goals keep theirs.
     static let templates: [GoalTemplate] = [
         GoalTemplate(
             type: .sessionsPerWeek,
-            title: "Weekly Practice",
+            title: "Weekly practice",
             description: "Complete 5 practice sessions this week",
             target: 5,
             durationDays: 7
         ),
         GoalTemplate(
             type: .practiceStreak,
-            title: "7-Day Streak",
+            title: "7-day streak",
             description: "Practice every day for a week",
             target: 7,
             durationDays: 7
         ),
         GoalTemplate(
             type: .improveScore,
-            title: "Score Improvement",
+            title: "Score improvement",
             description: "Increase your average score by 10 points",
             target: 10,
             durationDays: 14
         ),
         GoalTemplate(
             type: .reduceFiller,
-            title: "Reduce Fillers",
+            title: "Reduce fillers",
             description: "Reduce filler word usage by 20%",
             target: 20,
             durationDays: 14
         ),
         GoalTemplate(
             type: .totalMinutes,
-            title: "Practice Time",
+            title: "Practice time",
             description: "Accumulate 30 minutes of practice",
             target: 30,
             durationDays: 7

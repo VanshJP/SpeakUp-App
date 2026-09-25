@@ -26,7 +26,7 @@ struct AppearanceSettingsView: View {
 
     private var glassSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Glass", icon: "rectangle.on.rectangle")
+            GlassSectionHeader("Glass")
 
             Text("How translucent cards sit on the canvas.")
                 .font(.caption)
@@ -67,11 +67,13 @@ struct AppearanceSettingsView: View {
             .frame(maxWidth: .infinity)
             .glassEffect(.regular.tint(appearance.glassTint), in: .rect(cornerRadius: 16))
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(
-                        selected ? Color.white.opacity(0.92) : Color.white.opacity(0.14),
-                        lineWidth: selected ? 2 : 1
-                    )
+                // Selection is state, so it keeps its ring. The idle hairline
+                // was a second rim on a surface whose edge the glass already
+                // lights (rule 13).
+                if selected {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.92), lineWidth: 2)
+                }
             }
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .transaction { $0.animation = nil }
@@ -119,7 +121,7 @@ struct AppearanceSettingsView: View {
 
     private var canvasSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Background", icon: "paintpalette.fill")
+            GlassSectionHeader("Background")
 
             Text("The mood behind every tab.")
                 .font(.caption)

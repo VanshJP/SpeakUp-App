@@ -8,6 +8,8 @@ struct CountUpText: View, Animatable {
     var value: Double
     var font: Font = .displayNumeral
     var color: Color = .white
+    /// How each whole number on the way reads - "84", "3/5", "+12%".
+    var format: (Int) -> String = { "\($0)" }
 
     var animatableData: Double {
         get { value }
@@ -15,7 +17,7 @@ struct CountUpText: View, Animatable {
     }
 
     var body: some View {
-        Text("\(Int(value.rounded()))")
+        Text(format(Int(value.rounded())))
             .font(font)
             .foregroundStyle(color)
             .monospacedDigit()

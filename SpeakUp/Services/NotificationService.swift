@@ -27,6 +27,12 @@ class NotificationService {
         hasPermission = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
     }
 
+    /// The raw status, for a screen that must tell "never asked" from
+    /// "denied": only the first can still show the system prompt.
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await center.notificationSettings().authorizationStatus
+    }
+
     // MARK: - Retention Ladder
 
     /// Rebuild the whole schedule from a snapshot of where the user stands.

@@ -11,12 +11,18 @@ struct HistoryView: View {
     @State private var summaryToDelete: RecordingSummary?
     @State private var showingDeleteAlert = false
     @State private var selectedSection: HistorySection = .recordings
+    /// Owned here, not by the Progress section: the section picker tears that
+    /// section down, and its charts, tab and window survive the round trip.
+    @State private var progressModel = ProgressChartsModel()
 
     var onSelectRecording: (String) -> Void
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
     var onShowGoals: () -> Void = {}
     var onShowToday: () -> Void = {}
+    /// Starts a prompt from a readiness row's scenario. Nil (the default)
+    /// leaves the rows read-only until the root wires a practice route.
+    var onPracticeScenario: ((PracticeScenario) -> Void)? = nil
 
     // MARK: - Filtered Summaries
 
@@ -73,6 +79,9 @@ struct HistoryView: View {
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
+            if selectedSection == .progress {
+                await progressModel.load(from: modelContext.container)
+            }
         }
         .onAppear {
             viewModel.configure(with: modelContext)
@@ -99,7 +108,14 @@ struct HistoryView: View {
 
     private var progressContent: some View {
         VStack(spacing: AppLayout.chapterSpacing) {
-            ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
+            ProgressChartsContent(
+                model: progressModel,
+                vocabWords: viewModel.aggregatedVocab,
+                onShowToday: onShowToday,
+                onSelectRecording: onSelectRecording,
+                onPracticeScenario: onPracticeScenario,
+                reloadKey: viewModel.progressFingerprint
+            )
             progressToolsSection
         }
     }
@@ -107,55 +123,12 @@ struct HistoryView: View {
     // MARK: - Progress Tools (compact secondary actions)
 
     private var progressToolsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("Review", icon: "ellipsis.circle")
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10)
-                ],
-                spacing: 10
-            ) {
-                ForEach(ReviewToolKind.allCases) { tool in
-                    reviewToolButton(tool)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func reviewToolButton(_ tool: ReviewToolKind) -> some View {
-        switch tool {
-        case .compare:
-            if viewModel.summaries.count >= 2 {
-                NavigationLink { ComparisonView().restoresNavigationBar() } label: {
-                    ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
-                }
-                .buttonStyle(GlassPressStyle())
-                .accessibilityHint(tool.bestFor)
-            }
-        case .listenBack:
-            if viewModel.summaries.count >= 2 {
-                Button { onShowBeforeAfter() } label: {
-                    ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
-                }
-                .buttonStyle(GlassPressStyle())
-                .accessibilityHint(tool.bestFor)
-            }
-        case .goals:
-            Button { onShowGoals() } label: {
-                ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
-            }
-            .buttonStyle(GlassPressStyle())
-            .accessibilityHint(tool.bestFor)
-        case .journal:
-            Button { onShowJournalExport() } label: {
-                ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
-            }
-            .buttonStyle(GlassPressStyle())
-            .accessibilityHint(tool.bestFor)
-        }
+        ProgressReviewSection(
+            scoredTakes: viewModel.scoredTakeCount,
+            onListenBack: onShowBeforeAfter,
+            onGoals: onShowGoals,
+            onJournal: onShowJournalExport
+        )
     }
 
     // MARK: - Pinned Section Picker
@@ -268,15 +241,9 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
             }
 
-            GlassCard(padding: 0) {
-                VStack(spacing: 0) {
-                    ForEach(Array(week.summaries.enumerated()), id: \.element.id) { index, summary in
-                        if index > 0 {
-                            MetricRowDivider()
-                                .padding(.leading, 14)
-                        }
-                        recordingButton(summary)
-                    }
+            GlassRowGroup(dividerInset: 14) {
+                ForEach(week.summaries, id: \.id) { summary in
+                    recordingButton(summary)
                 }
             }
         }
@@ -290,7 +257,7 @@ struct HistoryView: View {
                 .padding(14)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowPressStyle())
         .contextMenu {
             Button {
                 Task {
