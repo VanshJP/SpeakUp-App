@@ -197,7 +197,7 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Models/DrillMode.swift` | DrillResult |
 | `SpeakUp/Models/DrillProgress.swift` | DrillRecord, DrillProgressStore |
 | `SpeakUp/Models/FillerWordList.swift` | FillerWordConfig |
-| `SpeakUp/Models/LessonContent.swift` | LessonSectionType, LessonSection |
+| `SpeakUp/Models/LessonContent.swift` | LessonSectionType, LessonSection, LessonLine |
 | `SpeakUp/Models/LessonIdentity.swift` | LessonMotif |
 | `SpeakUp/Models/Monetization.swift` | BetaAccess, LifetimeProduct, FoundingOffer, PaidFeature, PracticeTrial, TrialState, FreeTierPolicy, AllowanceState, AllowanceDecision, PracticeAllowance |
 | `SpeakUp/Models/PracticeRoutine.swift` | RoutineStep, RoutineProgress |
@@ -311,6 +311,7 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Views/Components/ToolTile.swift` | ToolTileLabel, ToolCategoryCardLabel, ToolCategoryCard · voiceOverLabel |
 | `SpeakUp/Views/ContentView.swift` | AppTab |
 | `SpeakUp/Views/Curriculum/CurriculumView.swift` | LessonModalityStrip |
+| `SpeakUp/Views/Curriculum/LessonContentView.swift` | LessonContentPreview |
 | `SpeakUp/Views/Curriculum/LessonDetailView.swift` | ReviewTarget, ActiveSheet |
 | `SpeakUp/Views/Curriculum/LessonGlyphView.swift` | LessonGlyphArt |
 | `SpeakUp/Views/Curriculum/LessonPath.swift` | LessonNodeState |
