@@ -99,8 +99,7 @@ final class RecordingProcessingCoordinator {
     func enqueue(
         recordingID: UUID,
         modelContext: ModelContext,
-        speechService: SpeechService,
-        llmService: LLMService
+        speechService: SpeechService
     ) {
         guard !activeRecordingIDs.contains(recordingID) else { return }
         activeRecordingIDs.insert(recordingID)
@@ -114,8 +113,7 @@ final class RecordingProcessingCoordinator {
             await self.process(
                 recordingID: recordingID,
                 modelContext: modelContext,
-                speechService: speechService,
-                llmService: llmService
+                speechService: speechService
             )
         }
         activeTasks[recordingID] = job
@@ -128,12 +126,11 @@ final class RecordingProcessingCoordinator {
     /// that promise before: a held-back recording was only retried if the user
     /// happened to reopen it. Called on foreground and on entitlement change.
     ///
-    /// Runs strictly one at a time - a batch of concurrent Whisper passes on a
-    /// cold foreground would be a memory spike, not a feature.
+    /// Runs strictly one at a time - a batch of concurrent analyses on a cold
+    /// foreground would be a CPU and memory spike, not a feature.
     func resumeDeferredRecordings(
         modelContext: ModelContext,
-        speechService: SpeechService,
-        llmService: LLMService
+        speechService: SpeechService
     ) {
         guard !resumeInFlight else { return }
         guard AllowanceGate.decision(settings: fetchSettings(from: modelContext)).isAllowed else { return }
@@ -169,8 +166,7 @@ final class RecordingProcessingCoordinator {
                     await self.process(
                         recordingID: id,
                         modelContext: modelContext,
-                        speechService: speechService,
-                        llmService: llmService
+                        speechService: speechService
                     )
                 }
                 self.activeTasks[id] = deferredJob
@@ -199,12 +195,11 @@ final class RecordingProcessingCoordinator {
     private func process(
         recordingID: UUID,
         modelContext: ModelContext,
-        speechService: SpeechService,
-        llmService: LLMService
+        speechService: SpeechService
     ) async {
-        // Keep the OS from suspending mid-analyze. Without this, a home-button
-        // during Whisper can freeze the stall watchdog's sleep, then look like
-        // a 60s decode hang on resume and abort into a truncated Apple path.
+        // Keep the OS from suspending mid-analysis. Without this, leaving the
+        // app can freeze the job partway, and the transcriber's deadline keeps
+        // counting while it is frozen.
         var backgroundTask = UIBackgroundTaskIdentifier.invalid
         backgroundTask = UIApplication.shared.beginBackgroundTask(
             withName: "SpeakUp.ProcessRecording"
@@ -353,20 +348,9 @@ final class RecordingProcessingCoordinator {
                     )
                 }()
 
-                if llmService.localLLM.isModelReady {
-                    // The unload waits on llama's inference lock, which a
-                    // generation still running for an earlier take holds for
-                    // its whole decode loop - on the CPU, beside Whisper, with
-                    // the model resident. Stop it first so the memory and the
-                    // cores come back before transcription starts.
-                    llmService.localLLM.cancelInflight()
-                    llmService.localLLM.unloadModel()
-                }
-
-                // No outer timeout: the Whisper legs self-bound on a decode-stall
-                // watchdog and the Apple Speech leg on a duration-scaled timer.
-                // An outer race here killed the fallback chain whenever the first
-                // attempt used its full window.
+                // The local LLM stays loaded: the transcriber runs in the
+                // system's speech process, not beside it in ours. It bounds
+                // its own wait, so there is no outer timeout here.
                 let transcription = try await speechService.transcribe(
                     audioURL: mediaURL,
                     fillerConfig: fillerConfig,
@@ -609,8 +593,8 @@ final class RecordingProcessingCoordinator {
         let trackPauses = settings?.trackPauses ?? true
 
         // Runs detached: the pipeline is pure statics (see
-        // `SpeechAnalysisPipeline`), so scoring needs neither the
-        // MainActor-isolated service instance nor the Whisper model.
+        // `SpeechAnalysisPipeline`), so scoring never needs the
+        // MainActor-isolated service instance.
         return await Task.detached(priority: .userInitiated) {
             () -> (analysis: SpeechAnalysis, markedWords: [TranscriptionWord]) in
             let audioLevelSamples = audioLevelData

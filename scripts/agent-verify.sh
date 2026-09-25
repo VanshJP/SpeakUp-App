@@ -45,8 +45,8 @@ run "Audio-engine taps" \
 run "On-device recognition" \
   'requiresOnDeviceRecognition' SpeakUp --glob '*.swift'
 
-run "noSpeechThreshold" \
-  'noSpeechThreshold' SpeakUp --glob '*.swift'
+run "SpeechAnalyzer file input (rejects formats; convert PCM instead)" \
+  'analyzeSequence\(from:|start\(inputAudioFile' SpeakUp --glob '*.swift'
 
 echo
 echo "== agent-verify: toolchain probe =="

@@ -53,7 +53,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 - Session Feedback defaults **on** (`sessionFeedbackEnabled`; existing installs keep their stored value). The recorder still skips the questionnaire for the first analyzed session so activation (baseline → score reveal) is never blocked.
 - Allowance is **not** consumed at capture time — only after successful analysis (`AllowanceGate.consume`).
 - Capture/save failures are never silent: `RecordingView` says the take did not save, explicitly removes blame, and offers Try Again or Cancel without exposing raw audio errors.
-- **The recorder warms the speech model as the take starts** (`RecordingViewModel.warmUpSpeechModel()`, utility priority), so a Whisper model the local LLM evicted is rebuilt during the take instead of on the analyzing screen. Skipped while the LLM is resident. See [speech-pipeline.md](./speech-pipeline.md).
+- **The recorder checks the speech model as the take starts** (`RecordingViewModel.prepareSpeechModel()`, utility priority), so a device that has never had Apple's speech model starts the one-time download during the take instead of after Stop. A no-op once the system has it. See [speech-pipeline.md](./speech-pipeline.md).
 - **Live filler counts coalesce.** `LiveTranscriptionService` parks each recognition result's words and timings per generation (utterance-ending results in order, partials latest-wins) and keeps one main-actor drain in flight; a final or error drains, then re-arms. It used to spawn a main-actor task per callback (gotcha punch list #20). Its `SFSpeechRecognizer` is built on first `start()`, because `RecordingView`'s `@State` view model is rebuilt on every parent redraw (gotcha §32).
 
 ## Cross-links

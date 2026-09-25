@@ -363,7 +363,7 @@ struct WordBankView: View {
                 Image(systemName: "waveform.and.magnifyingglass")
                     .font(.caption)
                     .foregroundStyle(AppColors.primary)
-                Text("Words and names here bias Whisper transcription accuracy. They do not count as vocab usage.")
+                Text("Words and names here help transcription spell them right. They do not count as vocab usage.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -84,11 +84,10 @@ class RecordingViewModel {
     /// Call / Siri interruption - recording has no pause, so we save & stop.
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
 
-    /// Environment-injected analysis services, captured at configure time so
-    /// the coordinator gets the same instances this session used (Whisper
-    /// model state, LLM availability). Not observable - no view reads them.
+    /// Environment-injected speech service, captured at configure time so the
+    /// coordinator gets the same instance this session used. Not observable -
+    /// no view reads it.
     @ObservationIgnored var speechService: SpeechService?
-    @ObservationIgnored var llmService: LLMService?
 
     func configure(
         with context: ModelContext,
@@ -96,8 +95,7 @@ class RecordingViewModel {
         duration: RecordingDuration,
         timerEndBehavior: TimerEndBehavior = .saveAndStop,
         countdownStyle: CountdownStyle = .countUp,
-        speechService: SpeechService,
-        llmService: LLMService
+        speechService: SpeechService
     ) {
         self.modelContext = context
         self.prompt = prompt
@@ -107,27 +105,17 @@ class RecordingViewModel {
         self.countdownStyle = countdownStyle
         self.progress = countdownStyle == .countDown ? 1.0 : 0.0
         self.speechService = speechService
-        self.llmService = llmService
         installInterruptionHandling()
     }
 
-    /// Starts building the speech model while the take is being recorded, so
-    /// the analysis does not wait on it after Stop. The launch preload usually
-    /// has it ready, but the local LLM can evict it to make room, and a rebuild
-    /// then landed on the analyzing screen. Utility priority keeps it out of the
-    /// recording's way; the analysis raises it by waiting on the same build.
-    ///
-    /// Skipped while the LLM is resident or loading: building beside it mid-take is the
-    /// memory spike that gets an app killed, and a killed take is lost. The
-    /// analysis unloads the LLM first and builds after, as before.
-    func warmUpSpeechModel() {
+    /// Gives a speech-model download a head start during the take when launch
+    /// could not finish it (a fresh install that went offline), so the
+    /// analysis does not start it after Stop. A no-op once the system has the
+    /// model, which is almost always.
+    func prepareSpeechModel() {
         guard let speechService else { return }
-        if let localLLM = llmService?.localLLM {
-            if localLLM.isModelReady { return }
-            if case .loading = localLLM.modelState { return }
-        }
         Task(priority: .utility) {
-            await speechService.preloadModel()
+            try? await speechService.prepareModel()
         }
     }
 
@@ -135,14 +123,13 @@ class RecordingViewModel {
     /// rather than touching the coordinator directly so enqueue stays a
     /// view-model decision (and stays testable without a view).
     func submitForAnalysis(_ recording: Recording) {
-        guard let speechService, let llmService, let modelContext else { return }
+        guard let speechService, let modelContext else { return }
         // The coordinator dedupes by recording ID, so a double-tap here is
         // harmless by construction.
         RecordingProcessingCoordinator.shared.enqueue(
             recordingID: recording.id,
             modelContext: modelContext,
-            speechService: speechService,
-            llmService: llmService
+            speechService: speechService
         )
     }
 

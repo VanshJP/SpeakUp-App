@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Raw Word Timing
 
-/// Common input format for filler detection, abstracted from WhisperKit/Apple Speech specifics.
+/// Common input format for filler detection, independent of the transcriber.
 nonisolated struct RawWordTiming: Sendable {
     let word: String
     let start: TimeInterval
@@ -19,7 +19,7 @@ nonisolated struct RawWordTiming: Sendable {
 
 // MARK: - Filler Detection Pipeline
 
-/// Shared filler detection logic used by WhisperService, SpeechService, and LiveTranscriptionService.
+/// Shared filler detection logic used by SpeechService and LiveTranscriptionService.
 /// Eliminates ~300 lines of duplicated pause/context computation + filler tagging + phrase detection.
 nonisolated enum FillerDetectionPipeline: Sendable {
 

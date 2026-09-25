@@ -42,7 +42,7 @@ nonisolated enum ConversationIsolationService {
             return (words, nil, nil)
         }
         // Prefer a caller-supplied buffer so speaker labeling and pitch can
-        // share one decode after Whisper returns.
+        // share the transcription job's one decode.
         guard let mono = monoPCM ?? MonoPCM.decode(url: audioURL) else {
             return (words, nil, nil)
         }

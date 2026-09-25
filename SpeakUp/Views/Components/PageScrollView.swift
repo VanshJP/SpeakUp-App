@@ -10,6 +10,10 @@ import SwiftUI
 /// because a scroll view scrolls on any axis where content exceeds bounds.
 /// The page ends up draggable sideways with everything cut off at the right.
 /// Clamping the content to the container width makes the overflow clip instead.
+///
+/// Never put one inside a scale transition or an animated `scaleEffect`: the
+/// container-relative width never settles under the transform and the main
+/// thread spins forever (gotcha §33). Fade instead.
 struct PageScrollView<Content: View>: View {
     var showsIndicators: Bool = true
     @ViewBuilder var content: Content

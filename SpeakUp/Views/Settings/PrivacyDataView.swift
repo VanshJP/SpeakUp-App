@@ -144,9 +144,10 @@ struct PrivacyDataView: View {
         Entry(
             question: "What gets downloaded, and how big is it?",
             answer: """
-            A speech recognition model downloads once, in the background, the \
-            first time you practice. It is roughly 150 MB and everything else \
-            depends on it.
+            Transcription uses Apple's on-device speech model, the one iOS \
+            already uses for dictation. Most iPhones have it; if yours does \
+            not, iOS downloads it once, in the background, and shares it with \
+            every app. It never sends your audio anywhere.
 
             The optional writing model behind coherence feedback is separate. \
             On a device with Apple Intelligence, Big Talk uses the system model \

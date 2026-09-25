@@ -52,7 +52,7 @@ Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentV
 1. CloudKit vs local store decided **before** container creation via `ICloudStorageService.resolvedSyncEnabledPreference`. Fallback: CloudKit → local → in-memory.
 2. Onboarding cover: wait for `@Query` settings so returning users never flash the cover.
 3. Seeding (prompts, settings, achievements, curriculum, story folders) runs concurrently; prompt seed is fingerprint-gated.
-4. Background launch work: legacy URL migration, iCloud file migration, Whisper preload, local LLM auto-load — do not block first paint on these.
+4. Background launch work: legacy URL migration, iCloud file migration, speech model check (`SpeechService.prepareModel()`), local LLM auto-load — do not block first paint on these.
 
 ## Cross-links
 

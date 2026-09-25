@@ -14,9 +14,10 @@ This doc only lists wiring and agent gotchas.
 | Scoring pipeline | `SpeechAnalysisPipeline` (`nonisolated` enum, bottom of `SpeakUp/Services/SpeechService.swift`) |
 | Job queue | `SpeakUp/Services/RecordingProcessingCoordinator.swift` |
 | Scoring | `SpeakUp/Services/SpeechScoringEngine.swift` |
-| Whisper / fallback | `WhisperService`, `SpeechService.transcribeWithAppleSpeech` |
+| Transcriber | `OnDeviceTranscriber` — Apple `SpeechAnalyzer` (`SpeechTranscriber`; `DictationTranscriber` on iPhone 11-class phones) |
+| Pause recovery | `WordTimingRefiner` — pulls tiled word ranges onto the voiced audio |
 | Live word capture | `DictationService` (word bank), `LiveTranscriptionService`, `ReadAloudService` |
-| Isolation | `SpeechIsolationService`, `ConversationIsolationService` |
+| Noise / speakers | `SpeechIsolationService` (noise measurement only), `ConversationIsolationService` |
 | Fillers | `FillerDetectionPipeline` |
 | Structural repetition | `StructuralRepetitionDetector` → `FillerWord(kind: .structural)` + crutch swaps |
 | Vocab matching | `VocabMatcher` — inflected bank + daily spotlight words; `WordSafety` gates adds |
@@ -29,10 +30,9 @@ This doc only lists wiring and agent gotchas.
 
 1. Detail (or coordinator) enqueues when `recording.analysis == nil`.
 2. Dedupe on `recordingID` inside `RecordingProcessingCoordinator`.
-3. Transcription order: isolation → WhisperKit → raw-URL retry → reload retry (only when the last Whisper leg threw; an empty transcript from a working model skips it) → Apple Speech (`SpeechService.transcribeWithAppleSpeech`, not `DictationService`).
-4. Primary-speaker labeling → scoring leg runs detached: `Task.detached` invokes `SpeechAnalysisPipeline.analyze(...)` (the coordinator's old `DispatchQueue.global` bridge is gone — under MainActor-default isolation it compiled clean and still hopped to the main actor).
-5. Optional LLM coherence enhance (Apple Intelligence → local llama → skip).
-6. On success: `AllowanceGate.consume` (not before).
+3. One detached job (`SpeechService.transcribeTake`): decode `MonoPCM` once → `OnDeviceTranscriber` → `WordTimingRefiner` → `FillerDetectionPipeline` → primary-speaker labeling + noise measurement. Then the scoring leg runs detached: `Task.detached` invokes `SpeechAnalysisPipeline.analyze(...)`.
+4. Optional LLM coherence enhance (Apple Intelligence → local llama → skip).
+5. On success: `AllowanceGate.consume` (not before).
 
 ## Agent gotchas
 
@@ -41,24 +41,18 @@ This doc only lists wiring and agent gotchas.
 - Never decode analysis blobs on main in list `body` — use `RecordingSummary` / chart points.
 - Never `#Predicate` on `Recording.analysis` — ObjC crash inside CoreData SQL gen; proxy via `transcriptionText != nil` (`analyzedRecordingCount`).
 - Re-fetch `Recording` by id after long transcription before mutating (user may have deleted it).
-- Whisper first load is slow — check service state before assuming failure.
-- WhisperKit must load **offline-first** once the Core ML bundle is on disk. `WhisperKitConfig(download: true)` contacts Hugging Face *before* checking the local cache, so spotty Wi‑Fi hangs analyzing even when the model is already downloaded. Resolve `Documents/huggingface/models/argmaxinc/whisperkit-coreml/<variant>` and pass `modelFolder` + `download: false` (plus `tokenizerFolder` at the Hub base). Cap first-time downloads (~45s) so a flaky network fails into on-device Apple Speech instead of spinning forever.
-- Treat a Hub cache as complete only when **AudioEncoder and TextDecoder** are both present. An interrupted download leaving just the encoder must not set `download: false` or the app permanently skips re-download.
-- A Whisper timeout (`modelDownloadTimedOut`, `modelBuildTimedOut`, `transcriptionTimedOut`; `WhisperServiceError.abandonsWhisper`) skips the raw-file retry and the reload leg and goes straight to Apple Speech. These errors must reach `SpeechService` unwrapped — they used to arrive as `modelNotLoaded` / `transcriptionFailed`, so the skip never fired and each leg re-waited.
-- The model build is a shared task (`WhisperService.modelBuild`), not work done under the semaphore. A take waits on the build itself (priority escalation, bounded wait); the launch preload builds at background priority and a take that ended mid-build used to queue behind it unescalated on "Preparing Speech Engine...".
-- Decode `MonoPCM` once after Whisper for speaker labeling + pitch (gotcha §16). Isolation may still decode before Whisper; do not hold that buffer across inference.
-- Analyzing UI must key the "Downloading…" copy off `isDownloadingModel`, not `!isModelLoaded`, or a failed first download keeps the download copy up through Apple Speech fallback.
-- Every `SFSpeech*RecognitionRequest` in the app sets `requiresOnDeviceRecognition = true` unconditionally. On-device is a product claim (`APP_STORE_LISTING.md` §3), so an unavailable recognizer must fail rather than fall back to Apple's servers. Never make it conditional on `supportsOnDeviceRecognition` — that flag reads false while assets install.
-- Lowering `DecodingOptions.noSpeechThreshold` makes WhisperKit drop *more* audio, one whole 30 s window at a time, with no error.
+- **Feed `SpeechAnalyzer` PCM converted to `bestAvailableAudioFormat`**, never a file (`analyzeSequence(from:)` / `start(inputAudioFile:)`). The analyzer rejects formats it does not list - its own file reader included - with `SFSpeechErrorDomain` 3, "Audio format is not supported". `OnDeviceTranscriber.convert` does it from the take's one `MonoPCM` decode.
+- **`SpeechTranscriber` word ranges tile each phrase edge to edge.** A pause lives inside the word before it. Anything that reads gaps between words (pause metrics, filler context, phonation time, MLR) needs `WordTimingRefiner.refine` first; `transcribeTake` runs it before filler tagging.
+- **Hesitations need `SpeechTranscriber`.** It keeps "um" and writes "uh" as "ah" (both in `FillerWordList`). `DictationTranscriber` strips them, with or without punctuation, so iPhone 11-class phones (8-core Neural Engine, `SpeechTranscriber.isAvailable == false`) count only word fillers. The analytics dimension `processingPath` says which ran.
+- **The simulator cannot transcribe.** Neither transcriber reports a compatible audio format there, so takes fail with "not available on this device". Test scoring on a device; UI work can use `ScreenshotSeeder`.
+- The speech model is the system's (`AssetInventory`), shared across apps and usually installed already. `SpeechService.prepareModel()` runs at launch, at take start (`RecordingViewModel.prepareSpeechModel()`), and before every transcription; concurrent calls share one download. Analyzing UI keys "Downloading…" off `isDownloadingModel`.
+- The transcriber's only timeout is its own deadline (`30 s + half the take`), raced through a continuation. Never race it in a task group: a group waits for every child before it rethrows, so the timeout could not fire past a wedged call.
+- `SpeechAnalyzer` needs no `SFSpeechRecognizer` authorization and has no server path. Every **live** `SFSpeech*RecognitionRequest` (dictation, Read Aloud, the in-take filler counter) still sets `requiresOnDeviceRecognition = true` unconditionally - on-device is a product claim (`APP_STORE_LISTING.md` §3). Never make it conditional on `supportsOnDeviceRecognition`, which reads false while assets install.
 - Score philosophy: progressive (short casual ≈ 50–65; solid minute ≈ 75–90; only empty/gibberish ≪ 20).
-- Pure scoring types are `nonisolated` — required under MainActor-default isolation (`/docs/AGENT_GOTCHAS.md`). That now includes the pipeline itself plus every engine it calls: `SpeechAnalysisPipeline`, `SpeechScoringEngine`, `PitchAnalysisService`, `TextAnalysisService`, `PromptRelevanceService`, `AudioWaveformGenerator`.
-- Deletion flows must call `RecordingProcessingCoordinator.cancelProcessing(recordingID:)` **before** removing the recording row. The coordinator keeps a per-recording `Task` handle (`activeTasks`), so cancel actually stops the work instead of only striking the id from the dedupe set; best-effort by design — a leg past its last cancellation check still finishes, and every persist re-fetches first.
-- Every Whisper wait is raced through a continuation (`FirstFinisher`), never a task group: a group waits for every child before it rethrows, so a timeout could not fire past a wedged WhisperKit call and the self-check sat on "Transcribing..." forever. A stalled decode's instance is dropped.
-- The Whisper stall watchdog works because `DecodeHeartbeat` carries a one-way abort flag that WhisperKit's per-token transcription callback checks: cancelling the awaited task alone never reaches WhisperKit internals, so without the flag a watchdog timeout abandoned the await but left a zombie decode running while the semaphore let the next caller in.
-- The decode runs on `WhisperDecodeExecutor` (a GCD-backed `TaskExecutor`, `Task.detached(executorPreference:)`), never the cooperative pool. WhisperKit 0.15's sampler blocks its thread on a semaphore twice per token, and on a busy pool that stalled the decode until a relaunch (gotcha §30). The heartbeat also beats from `segmentDiscoveryCallback`, which runs inline per window; the per-token callback arrives on a low-priority pool task that a busy pool starves.
-- The local LLM and Whisper share memory, not turns. `LocalLLMService.loadModel` runs `preloadCleanupHandler` (unload Whisper) only when the profile would not fit beside it (`minimumRecommendedMemoryBytes` + `coResidentHeadroomBytes`). Evicting on every load meant every take after the first rebuilt Whisper on the analyzing screen, since the result screen loads the LLM after each take.
-- The coordinator calls `cancelInflight()` before unloading the LLM ahead of transcription: the unload waits on llama's inference lock, which a generation left running for an earlier take holds for its whole decode.
-- `RecordingViewModel.warmUpSpeechModel()` starts the Whisper build at utility priority when a take begins, so an evicted model is ready by Stop. Skipped while the LLM is resident - building beside it mid-take risks the memory kill that loses the take.
+- Pure scoring types are `nonisolated` — required under MainActor-default isolation (`/docs/AGENT_GOTCHAS.md`). That now includes the pipeline itself plus every engine it calls: `SpeechAnalysisPipeline`, `SpeechScoringEngine`, `PitchAnalysisService`, `TextAnalysisService`, `PromptRelevanceService`, `AudioWaveformGenerator`, `OnDeviceTranscriber`, `WordTimingRefiner`.
+- Deletion flows must call `RecordingProcessingCoordinator.cancelProcessing(recordingID:)` **before** removing the recording row. The coordinator keeps a per-recording `Task` handle (`activeTasks`), and `SpeechService.transcribe` forwards that cancel into its detached job and the analyzer (`cancelAndFinishNow`). Best-effort by design — a leg past its last cancellation check still finishes, and every persist re-fetches first.
+- The local LLM and transcription no longer share app memory: nothing unloads the LLM before a take, and the LLM has nothing to evict when it loads.
+- Do not bring WhisperKit back for fillers. Its filler prompt made the decoder drop whole 30 s windows (the back half of most one-minute takes) after up to six temperature retries per window - that retry loop was the analyzing-screen hang - and `SpeechTranscriber` keeps hesitations without a prompt.
 
 ## Cross-links
 

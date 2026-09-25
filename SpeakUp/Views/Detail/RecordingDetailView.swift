@@ -158,7 +158,6 @@ struct RecordingDetailView: View {
             case .processing(let recording):
                 AnalyzingView(
                     recording: recording,
-                    isModelLoading: speechService.isLoadingModel,
                     isDownloadingModel: speechService.isDownloadingModel,
                     feedbackEnabled: feedbackEnabled,
                     feedbackQuestions: feedbackQuestionsForAnalyzing,
@@ -652,8 +651,7 @@ struct RecordingDetailView: View {
         RecordingProcessingCoordinator.shared.enqueue(
             recordingID: recording.id,
             modelContext: modelContext,
-            speechService: speechService,
-            llmService: llmService
+            speechService: speechService
         )
     }
 
@@ -1924,7 +1922,7 @@ struct RecordingDetailView: View {
         let wpmData = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 // Pure pipeline static - never construct `SpeechService` off the
-                // main actor (its init would spin up Whisper under MainActor default).
+                // main actor (it is MainActor-isolated).
                 let data = SpeechAnalysisPipeline.computeWPMTimeSeries(
                     words: words,
                     actualDuration: durationSnapshot

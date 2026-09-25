@@ -29,7 +29,6 @@ final class SessionFeedbackGateStore {
 
 struct AnalyzingView: View {
     let recording: Recording
-    let isModelLoading: Bool
     var isDownloadingModel: Bool = false
     var feedbackEnabled: Bool = false
     var feedbackQuestions: [FeedbackQuestion] = []
@@ -98,24 +97,16 @@ struct AnalyzingView: View {
         !feedbackQuestions.contains { $0.id != question.id && !isAnswered($0) }
     }
 
-    /// A first load is a ~150 MB download; every load after it takes seconds.
-    /// Showing the same spinner for both is what makes a slow first run read as
-    /// a hang rather than a download.
-    private var isFirstTimeModelDownload: Bool {
-        isDownloadingModel && !WhisperService.hasCompletedFirstLoad
-    }
-
+    /// Only a device that has never had Apple's speech model downloads it,
+    /// once. Saying so is what keeps that one slow first run from reading as
+    /// a hang.
     private var statusTitle: String {
-        if isFirstTimeModelDownload { return "Downloading Speech Model..." }
-        return isModelLoading ? "Preparing Speech Engine..." : stages[progressStage]
+        isDownloadingModel ? "Downloading Speech Model..." : stages[progressStage]
     }
 
     private var statusSubtitle: String {
-        if isFirstTimeModelDownload {
-            return "One-time download, about 150 MB. Your recording is already saved, leave this screen and it will score itself when the download finishes."
-        }
-        return isModelLoading
-            ? "Warming up the speech engine"
+        isDownloadingModel
+            ? "One-time download. Your recording is already saved, leave this screen and it will score itself when the download finishes."
             : "Your recording is safe. Scoring usually takes a moment."
     }
 
@@ -253,7 +244,7 @@ struct AnalyzingView: View {
     private var liveStatusTitle: String {
         if analysisReady { return "Your score is ready" }
         if !isStillProcessing { return "Scoring stopped" }
-        if isFirstTimeModelDownload || isModelLoading { return statusTitle }
+        if isDownloadingModel { return statusTitle }
         return stages[progressStage]
     }
 
@@ -262,7 +253,7 @@ struct AnalyzingView: View {
             return isWrappingUp ? "Opening it now." : "Finish up, or jump straight to it."
         }
         if !isStillProcessing { return "Open your results to see what happened." }
-        if isFirstTimeModelDownload || isModelLoading { return statusSubtitle }
+        if isDownloadingModel { return statusSubtitle }
         return "Reading your \(recording.actualDuration.minutesSeconds) take word by word."
     }
 
@@ -272,11 +263,11 @@ struct AnalyzingView: View {
         return AppColors.primary
     }
 
-    /// A guess, and only used to pace the waveform's fill: transcription scales with the
-    /// take, and a model that is still loading adds a few seconds on top.
+    /// A guess, and only used to pace the waveform's fill: transcription and
+    /// pitch scale with the take, a first-run model download adds its own time.
     private var expectedWait: TimeInterval {
-        let base = max(6, recording.actualDuration * 0.35 + 4)
-        return isModelLoading || isDownloadingModel ? base + 8 : base
+        let base = max(4, recording.actualDuration * 0.08 + 3)
+        return isDownloadingModel ? base + 20 : base
     }
 
     private var scoringStatus: some View {

@@ -39,10 +39,10 @@ rg -n 'isLifetime' SpeakUp --glob '*.swift'
 rg -n 'reloadAllTimelines\(' SpeakUp --glob '*.swift'
 rg -n 'installTap|removeTap' SpeakUp --glob '*.swift'
 rg -n 'requiresOnDeviceRecognition' SpeakUp --glob '*.swift'
-rg -n 'noSpeechThreshold' SpeakUp --glob '*.swift'
+rg -n 'analyzeSequence\(from:|start\(inputAudioFile' SpeakUp --glob '*.swift'
 ```
 
-Known-good hits exist (`EntitlementStore.isLifetime`, tap install *before* `engine.start()`, unconditional `requiresOnDeviceRecognition = true`). New call sites outside those files are the bug. Add or extend a test under `SpeakUpTests/` when the change is pure policy / scoring / links — execute it when Xcode is present.
+Known-good hits exist (`EntitlementStore.isLifetime`, tap install *before* `engine.start()`, unconditional `requiresOnDeviceRecognition = true`). `SpeechAnalyzer` file input has no known-good hit: feed converted PCM. New call sites outside those files are the bug. Add or extend a test under `SpeakUpTests/` when the change is pure policy / scoring / links — execute it when Xcode is present.
 
 Typed entry-point and symbol map: `scripts/generate-surface-map.sh` → `docs/SURFACE_MAP.md`. Re-run after adding or moving a type; `agent-doc-drift.sh` fails on a stale map. Golden routing tasks: `agent/evals/`.
 

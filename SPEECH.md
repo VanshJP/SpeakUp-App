@@ -1,7 +1,7 @@
 # Speech Analysis Algorithm Contract
 
 Purpose: compact, authoritative reference for LLM context injection. Source-of-truth for the Big Talk scoring pipeline. Canonical path: `SPEECH.md` (do not look for `SPEECH_ANALYSIS_DEEP_DIVE.md`). Agent index: `docs/features/speech-pipeline.md`.
-Last refresh: August 2026. Aligned with `SpeechService.swift`, `SpeechScoringEngine.swift`, `RecordingProcessingCoordinator.swift`.
+Last refresh: September 2026. Aligned with `SpeechService.swift`, `OnDeviceTranscriber.swift`, `SpeechScoringEngine.swift`, `RecordingProcessingCoordinator.swift`.
 
 ## Design philosophy
 
@@ -12,9 +12,10 @@ Scores are progressive and achievable. A beginner's natural 15–20 s answer lan
 - `SpeakUp/Services/SpeechScoringEngine.swift` — enhanced metrics, substance multiplier, gibberish gate, subscore helpers
 - `SpeakUp/Services/RecordingProcessingCoordinator.swift` — singleton job queue wrapping transcription + analysis + LLM pass
 - `SpeakUp/Services/FillerDetectionPipeline.swift` — shared pause-aware filler tagging
+- `SpeakUp/Services/WordTimingRefiner.swift` — pulls word ranges onto the voiced audio so pauses exist between words
 - `SpeakUp/Services/StructuralRepetitionDetector.swift` — anaphora-as-tic → `FillerWord` hits
-- `SpeakUp/Services/WhisperService.swift`, `DictationService.swift` — transcription backends
-- `SpeakUp/Services/SpeechIsolationService.swift` — audio preprocessing (high-pass + noise gate)
+- `SpeakUp/Services/OnDeviceTranscriber.swift` — transcription of a finished take on Apple's `SpeechAnalyzer` (`SpeechTranscriber`, `DictationTranscriber` on older phones)
+- `SpeakUp/Services/SpeechIsolationService.swift` — background-noise measurement (`AudioIsolationMetrics`) for reliability
 - `SpeakUp/Services/ConversationIsolationService.swift` — primary-speaker labeling
 - `SpeakUp/Services/TextAnalysisService.swift` — authority / hedges / power words / rhetoric
 - `SpeakUp/Services/PromptRelevanceService.swift` — keyword + semantic + coherence scoring
@@ -41,10 +42,15 @@ Entry: `RecordingDetailView.task` (main actor).
   2. Short-circuit when `recording.analysis != nil` — clear `isProcessing`, save, return.
   3. Load `UserSettings` (vocab words, filler config, voice profile) and `ScoreWeights` (fallback `ScoreWeights.defaults`).
   4. **Cached path** — if `transcriptionText` + `transcriptionWords` both present, call `analyzeTranscript(...)` directly.
-  5. **Fresh path** — unload local LLM (frees memory), then call `speechService.transcribe(audioURL:fillerConfig:preferredTerms:voiceProfile:)`, which runs the fallback chain `SpeechIsolationService.preprocessIfBeneficial` → `WhisperService.transcribe` (bias prompt toward fillers, `DecodingOptions.temperature = 0.0`, `noSpeechThreshold = 0.6`, `compressionRatioThreshold = 2.4`) → **raw-URL retry** → **WhisperService reload + retry** (only after a thrown, non-timeout error; never after an empty transcript) → Apple Speech (`SFSpeechURLRecognitionRequest`, `taskHint = .dictation`, `addsPunctuation = false`, `requiresOnDeviceRecognition = true` always).
-     **`noSpeechThreshold` is the silence trigger, not a speech-sensitivity dial.** WhisperKit discards a whole 30 s window — silently — when `noSpeechProb >` it and the window also fails `logProbThreshold`. Lowering it drops *more* audio; 0.6 is the WhisperKit/OpenAI default and anything below it deletes quiet stretches.
-     No outer timeout. The Whisper leg runs a **stall watchdog**: WhisperKit's per-token callback and its per-window segment callback both stamp a heartbeat, and the decode is abandoned only after `decodeStallTimeout` (60 s) with no beat, plus a loose `decodeCeiling` backstop for a decoder that beats without advancing. Elapsed-time caps are wrong here — a flat 90 s one used to time out long recordings and drop them onto Apple Speech. The per-token callback alone is not enough: WhisperKit delivers it from a low-priority detached task, which a busy thread pool starves while the decode itself is fine; the segment callback runs inline in the decode loop. The decode itself runs on `WhisperDecodeExecutor` (GCD-backed), not the cooperative pool — WhisperKit 0.15's sampler blocks its thread on a semaphore twice per token (gotcha §30). The Apple leg force-resumes on a duration-scaled timer instead, having no callback.
-     Result carries **every** transcribed word — speaker isolation labels `isPrimarySpeaker`, it never deletes words — plus `transcriptionText`, `audioIsolationMetrics`, `speakerIsolationMetrics`, and optional `voiceProfileUpdate` produced by `ConversationIsolationService.labelPrimarySpeaker(...)`. The primary-speaker gate is applied for **scoring only**, inside `analyze`.
+  5. **Fresh path** — `speechService.transcribe(audioURL:fillerConfig:preferredTerms:voiceProfile:)`, one detached job (`SpeechService.transcribeTake`):
+     1. `MonoPCM.decode(url:)` once — the same samples feed the transcriber, the pause refiner, the noise measurement, speaker labeling and pitch (gotcha §16).
+     2. `OnDeviceTranscriber.transcribe(_:contextualStrings:)` — Apple's `SpeechAnalyzer` with `SpeechTranscriber` (`.audioTimeRange` + `.transcriptionConfidence`), on the Neural Engine in the system's speech process. The framework has no server path. The PCM is converted to `SpeechAnalyzer.bestAvailableAudioFormat` first: the analyzer rejects other formats outright, its own file reader included. `transcriptionBiasTerms` go in as `AnalysisContext.contextualStrings`. Devices without a 16-core Neural Engine (iPhone 11 family, SE 2) get `DictationTranscriber`, which strips hesitations; the simulator has neither (no compatible formats), so transcription is device-only.
+     3. The model is the system's, shared across apps; `SpeechService.prepareModel()` installs it through `AssetInventory` at launch and again before each take (a no-op once installed). `isDownloadingModel` drives the analyzing copy.
+     4. One deadline, `30 s + half the take`, raced through a continuation (never a task group) so a wedged speech daemon fails the take instead of holding it. Measured at 60-85x real time on Apple silicon.
+     5. `WordTimingRefiner.refine` — `SpeechTranscriber` word ranges tile each phrase edge to edge (a pause after "that" comes back as a long "that"), so each word is pulled onto the longest voiced run inside its range: 10 ms frames, voiced above the take's own noise floor (10th-percentile frame) plus `max(6 dB, 25%)` of its dynamic range, silences under 0.15 s bridged. Words only shrink; a word with no voiced audio keeps its range. On real 20-60 s takes this recovered 4-20 pauses where the raw ranges showed 0-9.
+     6. `FillerDetectionPipeline.tagFillers(in:config:)` on the refined timings, then `ConversationIsolationService.labelPrimarySpeaker(...)` and `SpeechIsolationService.metrics(for:)`.
+     No outer timeout in the coordinator, and the local LLM stays loaded: nothing speech-related lives in the app's memory any more.
+     Result carries **every** transcribed word — speaker isolation labels `isPrimarySpeaker`, it never deletes words — plus `transcriptionText`, `audioIsolationMetrics`, `speakerIsolationMetrics`, and optional `voiceProfileUpdate`. The primary-speaker gate is applied for **scoring only**, inside `analyze`.
   6. `analyzeTranscript(...)` runs scoring detached — `Task.detached` invoking `SpeechAnalysisPipeline.analyze(...)` (`nonisolated` pure statics; the old GCD bridge compiled clean under MainActor-default isolation but still hopped to the main actor) — and marks vocab words inside that same detached pass via `VocabMatcher.mark(...)`.
   7. **Voice profile update** — if `conversationDetected || (filteredOutWordCount ≥ 4 && speakerSwitchCount ≥ 3)`: EMA with `α = 0.3` on `UserSettings.voiceProfileF0Hz` / `voiceProfileEnergyDb`; increment `voiceProfileSampleCount`.
   8. Persist `transcriptionText`, `transcriptionWords`, `analysis`, clear `isProcessing`, `try modelContext.save()`. On error, still clear `isProcessing` + save.
@@ -69,7 +75,7 @@ func analyze(
 ```
 
 Order inside `analyze`:
-1. Sort words by `start` (Whisper/Apple Speech can emit out-of-order segments).
+1. Sort words by `start` (cached transcripts from older engines can hold out-of-order segments).
 2. `shouldScoreUsingPrimarySpeakerWords(...)` gates speaker-isolated scoring on `totalWords ≥ 12`, primary-speaker ratio in `[0.55, 0.90]`, `separationConfidence ≥ 62`, and conversation evidence.
 3. `scoringWords` = primary-speaker words when gated, else sorted words. `scoringText = scoringWords.map(\.word).joined(separator: " ")`.
 4. Single pass builds `fillerCounts` and `pauseMetadata: [PauseInfo]` — gap threshold **0.4 s**, gaps > 10 s capped, `isTransition = previous word ends with .?!`. Filler rows sort by count descending, then word ascending for deterministic ties.
@@ -240,19 +246,19 @@ Reliability is derived from `audioIsolationMetrics.residualNoiseScore` and `spea
 ## Data processing services
 
 ### `FillerDetectionPipeline` (pause-aware tagging)
-Shared across WhisperService, SpeechService, LiveTranscriptionService — removes ~300 lines of duplicated logic.
+Shared across SpeechService and LiveTranscriptionService — removes ~300 lines of duplicated logic.
 
 - Constants: `pauseThreshold = 0.3 s`, `sentenceBoundaryThreshold = 0.8 s`.
 - Input: `[RawWordTiming(word, start, end, confidence)]`. Output: `[TranscriptionWord]` with `isFiller` set.
 - Pass 1: per-word context (`pauseBefore`, `pauseAfter`, `isStartOfSentence`) feeds `FillerWordList.isFillerWord(word, pauseBefore, pauseAfter, isStartOfSentence, config:)`. The context lets the filter distinguish "well" (filler after pause) from "well" (adverb mid-sentence).
-- Pass 2: multi-word phrase detection via `FillerWordList.isFillerPhrase(word[i], word[i+1])`. Both words are then marked `isFiller`.
+- Pass 2: multi-word phrase detection via `FillerWordList.isFillerPhrase(word[i], word[i+1])`, punctuation ignored ("you know," — the classic filler use carries the comma, and matching raw words missed every one of them). Both words are then marked `isFiller`.
 - Public API: `tagFillers(in:)`, `tagFillers(in:config:)`, plus `countFillers(words:timestamps:durations:)` overloads for legacy callers.
 
 ### `StructuralRepetitionDetector` (anaphora-as-tic)
 Flags repeated clause-opening frames (structural repetition), not classic fillers. On-device only.
 
 - Constants: `minOpeningNGram = 3`, `maxOpeningNGram = 5`, `minRunLength = 3`, `maxInterveningClauses = 1`, `clausePauseThreshold = 0.4 s`.
-- Clause split on commas, sentence-final `.?!;`, coordinating `and`/`but`/`or`, **and pause gaps** (Whisper often omits commas).
+- Clause split on commas, sentence-final `.?!;`, coordinating `and`/`but`/`or`, **and pause gaps** (transcribers often omit commas).
 - Opening match: normalized exact prefix (lowercase, punct stripped, common contractions expanded — `I'm` ↔ `I am`).
 - Intentional-list allowlist: openings starting with `first`/`second`/`third`/… are never flagged (curriculum rhetoric, not a tic).
 - Input: primary-speaker `[TranscriptionWord]` when diarization applied; gated by `trackFillerWords` in `SpeechAnalysisPipeline.analyze`.
@@ -379,7 +385,7 @@ var activeBackend: LLMBackend {
 - **LocalLLMService** (`LlamaSwift` + Gemma GGUF — Gemma 3 1B / Gemma 4 E2B / Gemma 4 E4B) is the fallback; auto-loads at app launch via `loadLocalModelIfNeeded()` when Apple Intelligence is unavailable.
 - **None** — coherence enhancement is skipped; rule-based relevance stands alone.
 
-Memory pressure: `LLMService` installs a `DispatchSourceMemoryPressure` monitor on `[.warning, .critical]` that unloads the local LLM and cancels in-flight generation. `RecordingProcessingCoordinator` also unloads the LLM before long Whisper transcriptions to avoid OOM.
+Memory pressure: `LLMService` installs a `DispatchSourceMemoryPressure` monitor on `[.warning, .critical]` that unloads the local LLM and cancels in-flight generation. Transcription no longer competes with it for app memory: `SpeechAnalyzer` runs in the system's process.
 
 Output shape:
 
