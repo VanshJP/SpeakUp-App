@@ -30,6 +30,7 @@ struct GlassButtonLabel: View {
                 if let icon, iconPosition == .left {
                     Image(systemName: icon)
                         .font(.system(size: size.iconSize, weight: .semibold))
+                        .symbolSwap(icon)
                 }
 
                 Text(title)
@@ -38,6 +39,7 @@ struct GlassButtonLabel: View {
                 if let icon, iconPosition == .right {
                     Image(systemName: icon)
                         .font(.system(size: size.iconSize, weight: .semibold))
+                        .symbolSwap(icon)
                 }
             }
         }

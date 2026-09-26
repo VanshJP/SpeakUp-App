@@ -459,10 +459,10 @@ struct WarmUpExerciseView: View {
                 Image(systemName: viewModel.isRunning ? "pause.fill" : "play.fill")
                     .font(.title.weight(.semibold))
                     .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: 76, height: 76)
                     .background(Circle().fill(Color.white.opacity(0.94)))
                     .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+                    .symbolSwap(viewModel.isRunning)
             }
             .buttonStyle(GlassPressStyle())
             .accessibilityLabel(viewModel.isRunning ? "Pause" : "Resume")

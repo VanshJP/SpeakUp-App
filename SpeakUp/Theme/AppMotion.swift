@@ -140,6 +140,15 @@ extension View {
         modifier(MotionModifier(animation: animation, value: value))
     }
 
+    /// Morphs an SF Symbol when `value` changes (play to pause, copy to
+    /// checkmark) instead of cutting between glyphs. The replace effect runs in
+    /// the symbol renderer, so it costs no layout or body work, and it goes
+    /// still under Reduce Motion.
+    func symbolSwap<V: Equatable>(_ value: V) -> some View {
+        contentTransition(.symbolEffect(.replace))
+            .motion(AppMotion.snap, value: value)
+    }
+
     /// Marks a control as the origin of a zoom presentation when the host
     /// hands one down. Views that are also built in previews or in contexts
     /// with no presentation pass nil and render untouched.

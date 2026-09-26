@@ -123,6 +123,7 @@ struct WordDetailSheet: View {
                 .font(.system(size: 26))
                 .foregroundStyle(AppColors.primary)
                 .frame(width: 50, height: 50)
+                .symbolSwap(pronunciationService.isSpeaking)
                 // Painted, not glass: this sits on a GlassCard (rule 13b).
                 .background { Circle().fill(Color.white.opacity(0.10)) }
                 .overlay { Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }

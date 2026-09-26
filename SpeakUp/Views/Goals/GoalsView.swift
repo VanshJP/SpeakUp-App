@@ -311,6 +311,7 @@ struct GoalTemplateCard: View {
                         Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle.fill")
                             .font(.title3)
                             .foregroundStyle(isAdded ? AppColors.success : AppColors.primary)
+                            .symbolSwap(isAdded)
                     }
 
                     Text(template.title)

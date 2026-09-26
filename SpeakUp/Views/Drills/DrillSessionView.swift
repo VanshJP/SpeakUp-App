@@ -319,7 +319,7 @@ struct DrillSessionView: View {
                 Image(systemName: viewModel.pauseMarkerActive ? "pause.circle.fill" : "mic.circle.fill")
                     .font(.title2)
                     .foregroundStyle(viewModel.pauseMarkerActive ? AppColors.warning : AppColors.categoryBrandBright)
-                    .contentTransition(.symbolEffect(.replace))
+                    .symbolSwap(viewModel.pauseMarkerActive)
 
                 Text(viewModel.pauseMarkerActive ? "Pause now" : "Keep speaking")
                     .font(.title3.weight(.bold))

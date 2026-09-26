@@ -320,6 +320,7 @@ struct StoryDetailView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                    .symbolSwap(showCopied)
                 if showCopied { Text("Copied") }
             }
             .font(.caption.weight(.medium))

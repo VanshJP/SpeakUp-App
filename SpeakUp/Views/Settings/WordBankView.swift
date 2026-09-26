@@ -266,6 +266,7 @@ struct WordBankView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(dictationEngine.isListening ? tint : .white.opacity(0.5))
                     .symbolEffect(.pulse, isActive: dictationEngine.isListening)
+                    .symbolSwap(dictationEngine.isListening)
             }
             .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
             .contentShape(Circle())

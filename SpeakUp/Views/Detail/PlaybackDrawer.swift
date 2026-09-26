@@ -246,6 +246,7 @@ struct PlaybackDrawerContainer: View {
                         .frame(width: 52, height: 52)
                         .background(Circle().fill(Color.white.opacity(0.94)))
                         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+                        .symbolSwap(playbackViewModel.isPlaying)
                 }
                 .buttonStyle(GlassPressStyle())
                 .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
@@ -281,6 +282,7 @@ struct PlaybackDrawerContainer: View {
                     .background(Circle().fill(Color.white.opacity(0.94)))
                     .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
                     .contentShape(Rectangle())
+                    .symbolSwap(playbackViewModel.isPlaying)
             }
             .buttonStyle(GlassPressStyle())
             .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
