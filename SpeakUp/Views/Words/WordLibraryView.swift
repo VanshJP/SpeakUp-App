@@ -578,6 +578,7 @@ private struct WordLibraryDetailSheet: View {
                         .font(.title3)
                         .foregroundStyle(AppColors.primary)
                         .frame(width: 48, height: 48)
+                        .symbolSwap(pronunciation.isSpeaking)
                         // Painted, not glass: this sits on a GlassCard (rule 13b).
                         .background { Circle().fill(Color.white.opacity(0.10)) }
                         .overlay { Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }

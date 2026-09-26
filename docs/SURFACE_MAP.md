@@ -270,7 +270,7 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Theme/AppCanvas.swift` | AppCanvasView, CanvasLookView |
 | `SpeakUp/Theme/AppColors.swift` | primary, accent, success, warning, error, info, recording, scoreLow, scoreMid, scoreGood, scoreHigh, scoreEmpty, scoreColor, scoreVerdict, meterTrack, difficultyColor, categoryBrandBright, categoryNeutral, categoryNeutralCool, categoryTeal, categoryIndigo, categoryPlum, categoryAmber, categorySage, categoryCopper, toolWarmUp, toolDrill, toolReadAloud, toolCalm, subscoreTones, subscoreTone, contributionColor, surfaceLift, cardStroke, glassTintPrimary, glassTintAccent, glassTintSuccess |
 | `SpeakUp/Theme/AppLayout.swift` | pageHorizontal, pageBottom, chapterSpacing, listSpacing, minHitTarget, pageContentInsets |
-| `SpeakUp/Theme/AppMotion.swift` | AmbientLoopModifier, MotionModifier, IntroRevealModifier, Phase · snap, settle, slide, reveal, ambient, body, introReveal, ambientLoop, motion, zoomSource |
+| `SpeakUp/Theme/AppMotion.swift` | AmbientLoopModifier, MotionModifier, IntroRevealModifier, Phase · snap, settle, slide, reveal, ambient, body, introReveal, ambientLoop, motion, symbolSwap, zoomSource |
 | `SpeakUp/Theme/AppType.swift` | displayNumeral, metricValue, statValue, eyebrow, eyebrowStyle |
 | `SpeakUp/Theme/AppearanceEnvironment.swift` | GlassAppearance, GlassAppearanceKey, AppCanvasKey, IsOnGlassKey · defaultValue |
 | `SpeakUp/Theme/CanvasLook.swift` | CanvasMood, CanvasFrame · paint, at, count, gain |

@@ -118,6 +118,7 @@ struct PromptSettingsView: View {
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isOn ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tertiary))
                     .accessibilityHidden(true)
+                    .symbolSwap(isOn)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

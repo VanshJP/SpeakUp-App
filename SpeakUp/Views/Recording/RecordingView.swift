@@ -934,6 +934,7 @@ struct MicLevelPill: View {
             Image(systemName: isHearing ? "mic.fill" : "mic.slash.fill")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(isHearing ? AppColors.success : AppColors.warning)
+                .symbolSwap(isHearing)
 
             if !isHearing {
                 Text("No sound")

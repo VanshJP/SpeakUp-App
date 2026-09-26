@@ -152,6 +152,7 @@ struct OnboardingChoiceCard: View {
                         .font(.system(size: 18))
                         .foregroundStyle(isSelected ? tint : Color.white.opacity(0.18))
                         .symbolEffect(.bounce, value: isSelected)
+                        .symbolSwap(isSelected)
                 }
             }
         }

@@ -209,6 +209,7 @@ struct BeforeAfterReplayView: View {
                                 .foregroundStyle(AppColors.primary)
                                 .frame(minWidth: AppLayout.minHitTarget, minHeight: AppLayout.minHitTarget)
                                 .contentShape(.rect)
+                                .symbolSwap(isPlaying)
                         }
                         .buttonStyle(GlassPressStyle())
                         .accessibilityLabel(isPlaying ? "Pause \(side.name)" : "Play \(side.name)")

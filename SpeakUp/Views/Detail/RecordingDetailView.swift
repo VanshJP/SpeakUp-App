@@ -1086,6 +1086,7 @@ struct RecordingDetailView: View {
                                 .foregroundStyle(showSpeakerTurns ? AppColors.primary : .secondary)
                                 .padding(6)
                                 .background {
+                                .symbolSwap(showSpeakerTurns)
                                     Circle()
                                         .fill(showSpeakerTurns ? AppColors.primary.opacity(0.15) : .clear)
                                 }
@@ -1107,6 +1108,7 @@ struct RecordingDetailView: View {
                                 .foregroundStyle(showFillerHighlights ? AppColors.warning : .secondary)
                                 .padding(6)
                                 .background {
+                                .symbolSwap(showFillerHighlights)
                                     Circle()
                                         .fill(showFillerHighlights ? AppColors.warning.opacity(0.1) : .clear)
                                 }
@@ -1127,6 +1129,7 @@ struct RecordingDetailView: View {
                                 .foregroundStyle(showVocabHighlights ? AppColors.success : .secondary)
                                 .padding(6)
                                 .background {
+                                .symbolSwap(showVocabHighlights)
                                     Circle()
                                         .fill(showVocabHighlights ? AppColors.success.opacity(0.1) : .clear)
                                 }
@@ -1282,6 +1285,7 @@ struct RecordingDetailView: View {
                 .foregroundStyle(showCopiedConfirmation ? AppColors.success : .secondary)
                 .padding(6)
                 .background {
+                .symbolSwap(showCopiedConfirmation)
                     Circle()
                         .fill(showCopiedConfirmation ? AppColors.success.opacity(0.1) : .clear)
                 }
